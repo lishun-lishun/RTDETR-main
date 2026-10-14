@@ -94,6 +94,10 @@ DEVICE=1,2,3 bash scripts/train_r18_3gpu_ddp_sequence.sh
 结果也不可能与单卡数值完全一致。需要最公平的单卡对照时，应优先使用上面的三卡实验
 队列。为保证稳定性，DDP 模式仍关闭 AMP，并保持 `lr0=1e-4`。
 
+DDP 临时入口会把当前项目根目录放到 `sys.path` 和 `PYTHONPATH` 首位，确保三个 rank
+加载本项目集成了 `ConvNormLayer`、`HIFI`、`MCAM` 等模块的源码，而不是 conda 环境中
+另行安装的官方 `ultralytics` 包。
+
 ### 其他运行方式
 
 训练一个实验：

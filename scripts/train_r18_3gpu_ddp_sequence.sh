@@ -2,6 +2,7 @@
 set -euo pipefail
 
 SCRIPT_DIR="$(cd -- "$(dirname -- "${BASH_SOURCE[0]}")" && pwd)"
+PROJECT_ROOT="$(cd -- "${SCRIPT_DIR}/.." && pwd)"
 
 # Three GPUs jointly train one model at a time. Global batch 12 gives each GPU
 # the same local batch 4 used by the single-GPU profile. Warmup is divided by
@@ -12,8 +13,13 @@ LR0="${LR0:-0.0001}"
 WARMUP_ITERS="${WARMUP_ITERS:-667}"
 
 export DEVICE
+# torchrun executes a temporary Python file outside the repository. Put this
+# checkout first so every rank imports the integrated local Ultralytics code,
+# not a separately installed package from site-packages.
+export PYTHONPATH="${PROJECT_ROOT}${PYTHONPATH:+:${PYTHONPATH}}"
 
 echo "Sequential DDP: devices=${DEVICE}, global_batch=${BATCH}, lr0=${LR0}, warmup_iters=${WARMUP_ITERS}"
+echo "Local source: ${PROJECT_ROOT}"
 echo "For the closest comparison with single-GPU runs, prefer train_r18_3gpu_queue.sh."
 
 bash "${SCRIPT_DIR}/train_r18_sequence.sh" \

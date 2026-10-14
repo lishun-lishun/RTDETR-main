@@ -27,8 +27,16 @@ def find_free_network_port() -> int:
 def generate_ddp_file(trainer):
     """Generates a DDP file and returns its file name."""
     module, name = f'{trainer.__class__.__module__}.{trainer.__class__.__name__}'.rsplit('.', 1)
+    # The generated file lives under ~/.config/Ultralytics/DDP rather than the
+    # repository. Without an explicit path, Python may import an unrelated
+    # pip-installed `ultralytics` package and fail to resolve custom modules.
+    project_root = str(Path(__file__).resolve().parents[2])
 
-    content = f'''overrides = {vars(trainer.args)} \nif __name__ == "__main__":
+    content = f'''import sys
+sys.path.insert(0, {project_root!r})
+
+overrides = {vars(trainer.args)}
+if __name__ == "__main__":
     from {module} import {name}
     from ultralytics.utils import DEFAULT_CFG_DICT
 
