@@ -55,3 +55,4 @@ from .WFAM import WFAM
 from .PolyMLP import PolyMLP
 from .SAA import SAA
 from .MSAM_TGRS import MSAM_TGRS
+from .anti_detr import HIFI, MCAM

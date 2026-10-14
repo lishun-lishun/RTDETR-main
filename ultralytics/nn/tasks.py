@@ -849,7 +849,7 @@ def parse_model(d, ch, verbose=True, warehouse_manager=None):  # model_dict, inp
                    TransformerEncoderLayer_LRSA, TransformerEncoderLayer_MALA, TransformerEncoderLayer_EGSA, TransformerEncoderLayer_SWSA, TransformerEncoderLayer_DWMMSA,
                    TransformerEncoderLayer_BinaryAttn, TransformerEncoderLayer_WCA, TransformerEncoderLayer_LCGA, TransformerEncoderLayer_CGTA, AIFI_AFFN, TransformerEncoderLayer_AFFN,
                    TransformerEncoderLayer_CirculantAttn, TransformerEncoderLayer_WDAM, TransformerEncoderLayer_SDTA,
-                   TransformerEncoderLayer_MSAM, TransformerEncoderLayer_PolyMLP, TransformerEncoderLayer_SAA):
+                   TransformerEncoderLayer_MSAM, TransformerEncoderLayer_PolyMLP, TransformerEncoderLayer_SAA, HIFI):
             c2 = ch[f]
             args = [ch[f], *args]
         elif m in (HGStem, HGBlock, Ghost_HGBlock, Rep_HGBlock, HGBlock_Attention):
@@ -991,7 +991,7 @@ def parse_model(d, ch, verbose=True, warehouse_manager=None):  # model_dict, inp
         elif m in {PSA}:
             c2 = ch[f]
             args = [c2, *args]
-        elif m in {SBA}:
+        elif m in {SBA, MCAM}:
             c1 = [ch[x] for x in f]
             c2 = c1[-1]
             args = [c1, c2]

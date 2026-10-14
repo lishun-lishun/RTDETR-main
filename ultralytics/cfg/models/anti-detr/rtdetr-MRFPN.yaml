@@ -1,0 +1,32 @@
+# anti-detr MRFPN model adapted for small UAVs in DUT-Anti-UAV.
+nc: 1
+scales:
+  l: [1.00, 1.00, 1024]
+
+backbone:
+  - [-1, 1, ConvNormLayer, [32, 3, 2, None, False, 'relu']]
+  - [-1, 1, ConvNormLayer, [32, 3, 1, None, False, 'relu']]
+  - [-1, 1, ConvNormLayer, [64, 3, 1, None, False, 'relu']]
+  - [-1, 1, nn.MaxPool2d, [3, 2, 1]]
+  - [-1, 1, Blocks, [64, BasicBlock, 2, 2, 'relu']]
+  - [-1, 1, Blocks, [128, BasicBlock, 2, 3, 'relu']]
+  - [-1, 1, Blocks, [256, BasicBlock, 2, 4, 'relu']]
+  - [-1, 1, Blocks, [512, BasicBlock, 2, 5, 'relu']]
+
+head:
+  - [-1, 1, Conv, [256, 1, 1, None, 1, 1, False]]
+  - [-1, 1, AIFI, [1024, 8]]
+  - [-1, 1, Conv, [256, 1, 1]]
+  - [[-1, 6], 1, MCAM, []]
+  - [-1, 3, RepC3, [256, 0.5]]
+  - [[-1, 5], 1, MCAM, []]
+  - [-1, 3, RepC3, [256, 0.5]]
+  - [[-1, 4], 1, MCAM, []]
+  - [-1, 3, RepC3, [128, 0.5]]
+  - [[-1, 14], 1, MCAM, []]
+  - [-1, 3, RepC3, [256, 0.5]]
+  - [[-1, 12], 1, MCAM, []]
+  - [-1, 3, RepC3, [256, 0.5]]
+  - [[-1, 10], 1, MCAM, []]
+  - [-1, 3, RepC3, [256, 0.5]]
+  - [[16, 18, 20, 22], 1, RTDETRDecoder, [nc, 128, 300, 4, 8, 3]]
