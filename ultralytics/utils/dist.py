@@ -54,7 +54,12 @@ def generate_ddp_command(world_size, trainer):
         shutil.rmtree(trainer.save_dir)  # remove the save_dir
     file = str(Path(sys.argv[0]).resolve())
     safe_pattern = re.compile(r'^[a-zA-Z0-9_. /\\-]{1,128}$')  # allowed characters and maximum of 100 characters
-    if not (safe_pattern.match(file) and Path(file).exists() and file.endswith('.py')):  # using CLI
+    # A custom Python launcher is re-run by torchrun without its original CLI
+    # arguments. Use Ultralytics' generated trainer entrypoint for this suite,
+    # otherwise every DDP worker would fall back to the launcher's default
+    # `--mode list` instead of training.
+    is_anti_detr_launcher = Path(file).name == 'train_dut_anti_uav.py'
+    if is_anti_detr_launcher or not (safe_pattern.match(file) and Path(file).exists() and file.endswith('.py')):
         file = generate_ddp_file(trainer)
     dist_cmd = 'torch.distributed.run' if TORCH_1_9 else 'torch.distributed.launch'
     port = find_free_network_port()

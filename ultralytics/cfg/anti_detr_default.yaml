@@ -1,0 +1,37 @@
+# Reproducible local protocol for the released Anti-DETR R18 ablations.
+#
+# Provenance: these values pin RTDETR-main's RT-DETR/Paddle-aligned defaults.
+# The Anti-DETR paper/repository does not publish a complete training config,
+# so this file must not be described as an exact paper hyperparameter profile.
+epochs: 100
+patience: 0
+batch: 4
+imgsz: 640
+cache: false
+workers: 4
+
+# Models are constructed from YAML. In this RTDETR-main branch the boolean
+# `pretrained: true` does not load a checkpoint for that code path, so make the
+# actual from-scratch behavior explicit. Pass --weights to train one model from
+# a concrete checkpoint when pretrained initialization is required.
+pretrained: false
+optimizer: AdamW
+seed: 0
+deterministic: true
+cos_lr: false
+close_mosaic: 0
+amp: false
+
+lr0: 0.0001
+lrf: 1.0
+momentum: 0.9
+weight_decay: 0.0001
+# RTDETR-main treats this field as a number of warmup iterations.
+warmup_epochs: 2000
+warmup_momentum: 0.8
+warmup_bias_lr: 0.1
+
+max_det: 300
+mosaic: 0.0
+mixup: 0.0
+copy_paste: 0.0

@@ -11,7 +11,7 @@ import yaml
 ROOT = Path(__file__).resolve().parent
 ANTI_MODEL_DIR = ROOT / "ultralytics" / "cfg" / "models" / "anti-detr"
 DATA_CONFIG = ROOT / "dataset" / "DUT-Anti-UAV.yaml"
-PAPER_CONFIG = ROOT / "ultralytics" / "cfg" / "anti_detr_paper.yaml"
+PROFILE_CONFIG = ROOT / "ultralytics" / "cfg" / "anti_detr_default.yaml"
 
 # Keep the baseline separate from anti-r18 even though their released topologies
 # are identical. This makes the baseline/control experiment explicit in reports.
@@ -40,6 +40,13 @@ def parse_args():
     parser.add_argument("--batch", type=int, default=None, help="Override the paper/default profile.")
     parser.add_argument("--imgsz", type=int, default=None, help="Override the paper/default profile.")
     parser.add_argument("--workers", type=int, default=None, help="Override the paper/default profile.")
+    parser.add_argument("--lr0", type=float, default=None, help="Override the initial learning rate.")
+    parser.add_argument(
+        "--warmup-iters",
+        type=int,
+        default=None,
+        help="Override warmup iterations (stored as warmup_epochs by this RTDETR-main fork).",
+    )
     parser.add_argument("--split", choices=("val", "test"), default="test")
     parser.add_argument(
         "--weights",
@@ -67,15 +74,38 @@ def selected_models(names):
     return {name: MODEL_CONFIGS[name] for name in names}
 
 
-def load_paper_profile(args):
-    profile = yaml.safe_load(PAPER_CONFIG.read_text(encoding="utf-8"))
-    for key in ("epochs", "batch", "imgsz", "workers"):
+def load_experiment_profile(args):
+    profile = yaml.safe_load(PROFILE_CONFIG.read_text(encoding="utf-8"))
+    for key in ("epochs", "batch", "imgsz", "workers", "lr0"):
         value = getattr(args, key)
         if value is not None:
             profile[key] = value
+    if args.warmup_iters is not None:
+        profile["warmup_epochs"] = args.warmup_iters
     if args.device is not None:
         profile["device"] = args.device
     return profile
+
+
+def device_count(device):
+    """Return the requested CUDA process count without importing PyTorch."""
+    if device is None or not isinstance(device, str):
+        return 1
+    devices = [item.strip() for item in device.split(",") if item.strip()]
+    return len(devices) if all(item.isdigit() for item in devices) else 1
+
+
+def validate_profile(mode, profile):
+    """Fail early when a DDP global batch cannot be divided across GPUs."""
+    if mode != "train":
+        return
+    world_size = device_count(profile.get("device"))
+    batch = profile["batch"]
+    if world_size > 1 and batch % world_size:
+        raise SystemExit(
+            f"DDP requires batch to be divisible by GPU count: batch={batch}, GPUs={world_size}. "
+            f"Use --batch {world_size * max(round(batch / world_size), 1)} or another multiple of {world_size}."
+        )
 
 
 def find_best_weights(project, model_name):
@@ -93,8 +123,15 @@ def print_plan(mode, models, profile, args):
     print(f"data={DATA_CONFIG}")
     dataset_root = yaml.safe_load(DATA_CONFIG.read_text(encoding="utf-8"))["path"]
     print(f"dataset_root={dataset_root}")
-    print(f"paper_profile={PAPER_CONFIG}")
+    print(f"experiment_profile={PROFILE_CONFIG}")
+    print("profile_provenance=RTDETR-main defaults; not a complete paper-released training config")
     print("settings=" + ", ".join(f"{key}={value}" for key, value in profile.items()))
+    world_size = device_count(profile.get("device"))
+    if world_size > 1:
+        print(
+            f"ddp_world_size={world_size}, global_batch={profile['batch']}, "
+            f"per_gpu_batch={profile['batch'] // world_size}"
+        )
     for name, config in models.items():
         if mode == "test":
             weights = args.weights or "<auto: latest best.pt>"
@@ -167,7 +204,8 @@ def main():
             stacklevel=1,
         )
 
-    profile = load_paper_profile(args)
+    profile = load_experiment_profile(args)
+    validate_profile(args.mode, profile)
     if args.mode == "list" or args.dry_run:
         print_plan(args.mode, models, profile, args)
         return
