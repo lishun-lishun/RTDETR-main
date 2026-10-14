@@ -1,5 +1,5 @@
-# anti-detr wavelet-convolution model adapted for DUT-Anti-UAV.
-nc: 1
+# anti-detr wavelet-convolution model (author-released architecture).
+nc: 80
 scales:
   l: [1.00, 1.00, 1024]
 

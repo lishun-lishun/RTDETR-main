@@ -1,5 +1,5 @@
-# anti-detr four-scale P2 model adapted for small UAVs in DUT-Anti-UAV.
-nc: 1
+# anti-detr four-scale P2 model (author-released architecture).
+nc: 80
 scales:
   l: [1.00, 1.00, 1024]
 

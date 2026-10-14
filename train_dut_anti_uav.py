@@ -1,58 +1,180 @@
-"""Train one of the integrated anti-detr configurations on DUT-Anti-UAV."""
+"""Train or test the RT-DETR-R18 baseline and all author-released anti-detr configs."""
 
 import argparse
+import csv
+import warnings
 from pathlib import Path
 
-from ultralytics import RTDETR
+import yaml
 
 
 ROOT = Path(__file__).resolve().parent
-MODEL_DIR = ROOT / "ultralytics" / "cfg" / "models" / "anti-detr"
+ANTI_MODEL_DIR = ROOT / "ultralytics" / "cfg" / "models" / "anti-detr"
 DATA_CONFIG = ROOT / "dataset" / "DUT-Anti-UAV.yaml"
+PAPER_CONFIG = ROOT / "ultralytics" / "cfg" / "anti_detr_paper.yaml"
+
+# Keep the baseline separate from anti-r18 even though their released topologies
+# are identical. This makes the baseline/control experiment explicit in reports.
 MODEL_CONFIGS = {
-    path.stem: path for path in sorted(MODEL_DIR.glob("*.yaml"))
+    "original-r18": ROOT / "ultralytics" / "cfg" / "models" / "rt-detr" / "rtdetr-r18.yaml",
+    "anti-r18": ANTI_MODEL_DIR / "rtdetr-r18.yaml",
+    "anti-wtconv": ANTI_MODEL_DIR / "rtdetr-WTConv.yaml",
+    "anti-hifi": ANTI_MODEL_DIR / "rtdetr-HIFI.yaml",
+    "anti-mrfpn": ANTI_MODEL_DIR / "rtdetr-MRFPN.yaml",
+    "anti-p2": ANTI_MODEL_DIR / "rtdetr-p2.yaml",
 }
 
 
 def parse_args():
     parser = argparse.ArgumentParser(description=__doc__)
+    parser.add_argument("--mode", choices=("list", "train", "test"), default="list")
     parser.add_argument(
-        "--model",
-        choices=tuple(MODEL_CONFIGS),
-        default="rtdetr-HIFI",
-        help="Integrated anti-detr model configuration.",
+        "--models",
+        nargs="+",
+        choices=("all", *MODEL_CONFIGS),
+        default=("all",),
+        help="Models to run; 'all' uses the baseline followed by every anti-detr config.",
     )
-    parser.add_argument("--epochs", type=int, default=300)
-    parser.add_argument("--batch", type=int, default=4)
-    parser.add_argument("--imgsz", type=int, default=640)
-    parser.add_argument("--workers", type=int, default=4)
     parser.add_argument("--device", default=None, help="For example: 0, 0,1, or cpu.")
-    parser.add_argument("--weights", type=Path, default=None, help="Optional .pt weights to load.")
-    parser.add_argument("--project", type=Path, default=ROOT / "runs" / "train")
-    parser.add_argument("--name", default=None)
+    parser.add_argument("--epochs", type=int, default=None, help="Override the paper/default profile.")
+    parser.add_argument("--batch", type=int, default=None, help="Override the paper/default profile.")
+    parser.add_argument("--imgsz", type=int, default=None, help="Override the paper/default profile.")
+    parser.add_argument("--workers", type=int, default=None, help="Override the paper/default profile.")
+    parser.add_argument("--split", choices=("val", "test"), default="test")
+    parser.add_argument(
+        "--weights",
+        type=Path,
+        default=None,
+        help="Optional checkpoint/pretrained weights; valid only when one model is selected.",
+    )
+    parser.add_argument(
+        "--train-project",
+        type=Path,
+        default=ROOT / "runs" / "anti-detr" / "train",
+    )
+    parser.add_argument(
+        "--test-project",
+        type=Path,
+        default=ROOT / "runs" / "anti-detr" / "test",
+    )
+    parser.add_argument("--dry-run", action="store_true", help="Print the plan without loading PyTorch.")
     return parser.parse_args()
+
+
+def selected_models(names):
+    if "all" in names:
+        return MODEL_CONFIGS
+    return {name: MODEL_CONFIGS[name] for name in names}
+
+
+def load_paper_profile(args):
+    profile = yaml.safe_load(PAPER_CONFIG.read_text(encoding="utf-8"))
+    for key in ("epochs", "batch", "imgsz", "workers"):
+        value = getattr(args, key)
+        if value is not None:
+            profile[key] = value
+    if args.device is not None:
+        profile["device"] = args.device
+    return profile
+
+
+def find_best_weights(project, model_name):
+    candidates = list(project.glob(f"{model_name}*/weights/best.pt"))
+    if not candidates:
+        raise FileNotFoundError(
+            f"No best.pt found for {model_name!r} below {project}. "
+            "Train it first or pass --weights for a single model."
+        )
+    return max(candidates, key=lambda path: path.stat().st_mtime)
+
+
+def print_plan(mode, models, profile, args):
+    print(f"mode={mode}")
+    print(f"data={DATA_CONFIG}")
+    dataset_root = yaml.safe_load(DATA_CONFIG.read_text(encoding="utf-8"))["path"]
+    print(f"dataset_root={dataset_root}")
+    print(f"paper_profile={PAPER_CONFIG}")
+    print("settings=" + ", ".join(f"{key}={value}" for key, value in profile.items()))
+    for name, config in models.items():
+        if mode == "test":
+            weights = args.weights or "<auto: latest best.pt>"
+            print(f"{name}: config={config}, weights={weights}, split={args.split}")
+        else:
+            print(f"{name}: config={config}")
+
+
+def train(models, profile, args):
+    from ultralytics import RTDETR
+
+    for name, config in models.items():
+        print(f"\n{'=' * 24} TRAIN {name} {'=' * 24}")
+        model = RTDETR(str(config))
+        if args.weights is not None:
+            model.load(str(args.weights))
+        model.train(
+            data=str(DATA_CONFIG),
+            project=str(args.train_project),
+            name=name,
+            **profile,
+        )
+
+
+def test(models, profile, args):
+    from ultralytics import RTDETR
+
+    rows = []
+    for name in models:
+        weights = args.weights or find_best_weights(args.train_project, name)
+        print(f"\n{'=' * 24} TEST {name} {'=' * 24}")
+        model = RTDETR(str(weights))
+        metrics = model.val(
+            data=str(DATA_CONFIG),
+            split=args.split,
+            batch=profile["batch"],
+            imgsz=profile["imgsz"],
+            workers=profile["workers"],
+            max_det=profile["max_det"],
+            device=profile.get("device"),
+            project=str(args.test_project),
+            name=name,
+        )
+        row = {"model": name, "weights": str(weights), "split": args.split}
+        row.update(getattr(metrics, "results_dict", {}))
+        speed = getattr(metrics, "speed", {}) or {}
+        row.update({f"speed/{key}": value for key, value in speed.items()})
+        rows.append(row)
+
+    args.test_project.mkdir(parents=True, exist_ok=True)
+    summary = args.test_project / f"{args.split}_summary.csv"
+    fields = list(dict.fromkeys(key for row in rows for key in row))
+    with summary.open("w", newline="", encoding="utf-8") as file:
+        writer = csv.DictWriter(file, fieldnames=fields)
+        writer.writeheader()
+        writer.writerows(rows)
+    print(f"\nSummary saved to {summary}")
 
 
 def main():
     args = parse_args()
-    model = RTDETR(str(MODEL_CONFIGS[args.model]))
-    if args.weights:
-        model.load(str(args.weights))
+    models = selected_models(args.models)
+    if args.weights is not None and len(models) != 1:
+        raise SystemExit("--weights can only be used with one explicitly selected model")
+    if "anti-mrfpn" in models:
+        warnings.warn(
+            "The author repository does not contain the MCAM/AGCAU implementation. "
+            "anti-mrfpn currently uses the documented SBA interface-compatible fallback "
+            "and is not an exact reproduction of the paper's internal AGCAU algorithm.",
+            stacklevel=1,
+        )
 
-    train_args = {
-        "data": str(DATA_CONFIG),
-        "cache": False,
-        "imgsz": args.imgsz,
-        "epochs": args.epochs,
-        "batch": args.batch,
-        "workers": args.workers,
-        "patience": 0,
-        "project": str(args.project),
-        "name": args.name or args.model,
-    }
-    if args.device is not None:
-        train_args["device"] = args.device
-    model.train(**train_args)
+    profile = load_paper_profile(args)
+    if args.mode == "list" or args.dry_run:
+        print_plan(args.mode, models, profile, args)
+        return
+    if args.mode == "train":
+        train(models, profile, args)
+    else:
+        test(models, profile, args)
 
 
 if __name__ == "__main__":

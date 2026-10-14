@@ -1,6 +1,5 @@
-# DUT-Anti-UAV in Ultralytics detection format.
-# Forward slashes keep this Windows path valid in YAML.
-path: E:/code/RT-DETR/DUT-Anti-UAV/DUT-Anti-UAV
+# DUT-Anti-UAV server path in Ultralytics detection format.
+path: /home/sict/Documents/AILAB/Dataset/lishun/rtdetr_uav/DUT-Anti-UAV/DUT-Anti-UAV
 train: images/train
 val: images/val
 test: images/test

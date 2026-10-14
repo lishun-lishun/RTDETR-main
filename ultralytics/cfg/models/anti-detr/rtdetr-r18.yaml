@@ -1,5 +1,5 @@
-# anti-detr RT-DETR-R18 adapted for the one-class DUT-Anti-UAV dataset.
-nc: 1
+# anti-detr RT-DETR-R18 control model (author-released architecture).
+nc: 80
 scales:
   l: [1.00, 1.00, 1024]
 
