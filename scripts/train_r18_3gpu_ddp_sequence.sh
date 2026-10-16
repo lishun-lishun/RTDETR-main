@@ -13,6 +13,7 @@ LR0="${LR0:-0.0001}"
 WARMUP_ITERS="${WARMUP_ITERS:-667}"
 
 export DEVICE
+export CUDA_VISIBLE_DEVICES="${DEVICE}"
 # torchrun executes a temporary Python file outside the repository. Put this
 # checkout first so every rank imports the integrated local Ultralytics code,
 # not a separately installed package from site-packages.

@@ -25,6 +25,13 @@ esac
 
 cd "${PROJECT_ROOT}"
 
+# Bind physical GPU IDs before Python (and PyTorch) starts. Selecting a device
+# inside the trainer can be too late if CUDA was initialized while constructing
+# the model, causing concurrent queue jobs to share the wrong GPU.
+if [[ "${DEVICE}" =~ ^[0-9]+(,[0-9]+)*$ ]]; then
+    export CUDA_VISIBLE_DEVICES="${DEVICE}"
+fi
+
 ARGS=(
     --mode train
     --models "${MODEL}"
@@ -44,6 +51,6 @@ if [[ -n "${INIT_WEIGHTS:-}" ]]; then
     ARGS+=(--weights "${INIT_WEIGHTS}")
 fi
 
-echo "[$(date '+%F %T')] starting ${MODEL} on device ${DEVICE}"
+echo "[$(date '+%F %T')] starting ${MODEL} on device ${DEVICE} (CUDA_VISIBLE_DEVICES=${CUDA_VISIBLE_DEVICES:-unset})"
 "${PYTHON_BIN}" train_dut_anti_uav.py "${ARGS[@]}" "$@"
 echo "[$(date '+%F %T')] completed ${MODEL}"

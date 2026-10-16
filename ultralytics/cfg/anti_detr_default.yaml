@@ -6,9 +6,9 @@
 epochs: 150
 patience: 0
 batch: 8
-# Each A30 holds four training images. Two micro-batches make one optimizer
-# update with an effective batch of eight images.
-micro_batch: 4
+# A micro-batch of four still exhausted GPU memory on the first forward pass.
+# Four micro-batches of two keep the effective optimizer batch at eight.
+micro_batch: 2
 test_batch: 16
 imgsz: 640
 cache: false

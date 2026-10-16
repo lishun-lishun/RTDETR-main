@@ -51,9 +51,9 @@ DOI: `10.1016/j.neucom.2026.132935`）。
 | seed / deterministic | `0 / True` |
 | max detections / queries | `300 / 300` |
 
-训练器采用 `max_norm=0.1` 梯度裁剪。A30 24 GB 上直接以 batch 8 训练已触发
-CUDA 显存不足，因此默认每次前向使用 `micro_batch=4`，累积两次梯度后更新一次，
-有效训练 batch 仍为 8。warmup 的微批次数相应变为 4000，使其覆盖的样本数与原先
+训练器采用 `max_norm=0.1` 梯度裁剪。A30 24 GB 上以 batch 8 和 micro batch 4
+训练均已触发 CUDA 显存不足，因此默认每次前向使用 `micro_batch=2`，累积四次梯度后更新一次，
+有效训练 batch 仍为 8。warmup 的微批次数相应变为 8000，使其覆盖的样本数与原先
 batch 8、2000 次更新相近。梯度累积与单次 batch 8 的数值计算不会完全相同。
 
 所有模型当前都从 YAML 随机初始化。此分支对 YAML 新建模型使用
@@ -74,8 +74,9 @@ python train_dut_anti_uav.py --mode train --models all --device 0 --dry-run
 
 这个模式同时运行最多 3 个实验，每个实验独占一张卡：第一批按顺序分配
 `original-r18 -> GPU 1`、`anti-r18 -> GPU 2`、`anti-wtconv -> GPU 3`，全部完成后
-再启动第二批 `anti-hifi`、`anti-p2`、`anti-mrfpn`。每个实验使用实际 micro batch 4，
-梯度累积 2 次，保持有效训练 batch 8 和 `lr0=1e-4`。
+再启动第二批 `anti-hifi`、`anti-p2`、`anti-mrfpn`。每个实验使用实际 micro batch 2，
+梯度累积 4 次，保持有效训练 batch 8 和 `lr0=1e-4`。启动脚本会在导入 PyTorch
+前设置 `CUDA_VISIBLE_DEVICES`，保证每个进程绑定到指定的物理 GPU。
 
 ```bash
 GPU_LIST=1,2,3 bash scripts/train_r18_3gpu_queue.sh
@@ -147,8 +148,9 @@ DEVICE=0 SPLIT=test bash scripts/test_r18_sequence.sh
 
 测试 batch 默认 16；汇总指标保存在 `runs/anti-detr/test/test_summary.csv`。
 如需临时改变参数，可传入 `--batch`（有效训练 batch）、`--micro-batch`（实际训练
-batch）、`--test-batch`（测试）、`--imgsz` 或 `--workers`。若 micro batch 4 仍然
-超出显存，可用 `--micro-batch 2`，有效 batch 继续保持 8，但训练会更慢。
+batch）、`--test-batch`（测试）、`--imgsz` 或 `--workers`。若 micro batch 2 仍然
+超出显存，可用 `--micro-batch 1`，有效 batch 继续保持 8，但训练会更慢；
+还应使用 `nvidia-smi` 检查卡上是否有其他进程占用显存。
 
 ## 源仓库缺失项说明
 
