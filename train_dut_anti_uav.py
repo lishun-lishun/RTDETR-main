@@ -43,6 +43,12 @@ def parse_args():
     parser.add_argument("--imgsz", type=int, default=None, help="Override image size.")
     parser.add_argument("--workers", type=int, default=None, help="Override data loader workers.")
     parser.add_argument("--lr0", type=float, default=None, help="Override the initial learning rate.")
+    parser.add_argument("--lrf", type=float, default=None, help="Override the final learning-rate factor.")
+    parser.add_argument(
+        "--cos-lr", action=argparse.BooleanOptionalAction, default=None,
+        help="Enable or disable cosine learning-rate decay.",
+    )
+    parser.add_argument("--warmup-bias-lr", type=float, default=None, help="Override the initial bias warmup LR.")
     parser.add_argument(
         "--warmup-iters",
         type=int,
@@ -78,7 +84,7 @@ def selected_models(names):
 
 def load_experiment_profile(args):
     profile = yaml.safe_load(PROFILE_CONFIG.read_text(encoding="utf-8"))
-    for key in ("epochs", "batch", "imgsz", "workers", "lr0"):
+    for key in ("epochs", "batch", "imgsz", "workers", "lr0", "lrf", "cos_lr", "warmup_bias_lr"):
         value = getattr(args, key)
         if value is not None:
             profile[key] = value

@@ -47,6 +47,7 @@ DOI: `10.1016/j.neucom.2026.132935`）。
 | initial LR / final LR factor | `0.0001 / 1.0`（后者是本工程设置） |
 | momentum / weight decay | `0.9 / 0.0001` |
 | warmup | `2000` iterations（本工程设置） |
+| AdamW bias warmup 初始学习率 | `0`（修正原先的 `0.1`，本工程设置） |
 | AMP / mosaic / mixup | `False / 0 / 0` |
 | seed / deterministic | `0 / True` |
 | max detections / queries | `300 / 300` |
@@ -86,7 +87,7 @@ GPU_LIST=1,2,3 bash scripts/train_r18_3gpu_queue.sh
 互相混杂。如果一批中任一实验失败，脚本等待该批其他实验退出后停止，不会继续启动
 下一批。
 
-### 可选：三卡 DDP 顺序训练
+### 三卡 DDP 顺序训练（一次只训练一个实验）
 
 这个模式让 GPU 1、2、3 共同训练一个模型，六个模型仍逐个顺序执行：
 
@@ -94,12 +95,18 @@ GPU_LIST=1,2,3 bash scripts/train_r18_3gpu_queue.sh
 DEVICE=1,2,3 bash scripts/train_r18_3gpu_ddp_sequence.sh
 ```
 
-默认有效全局 batch 为 24：每次前向总 micro batch 12（每卡 4），累积两次梯度再
-更新一次；warmup 从 2000 次缩放为 667 次更新，使其覆盖的样本数接近单卡有效
-batch 8 时的设置。当前训练器要求 micro batch 能被 3 整除，因此无法
-用三卡 DDP 直接保持全局训练 batch 8。全局 batch 24 会减少每个 epoch 的优化器更新
-次数，结果可能与 batch 8 有差异。需要严格使用论文表中的全局 batch 8 时，应使用上面
-的三卡实验队列。DDP 模式保持 `lr0=1e-4` 和关闭 AMP。
+按 batch 24 的要求，默认每次前向总 micro batch 12（每卡 4），累积两次梯度后
+更新一次。warmup 从本工程 batch 8 的 2000 次缩放为 667 次更新，使其覆盖的
+训练样本数接近 batch 8 的设置。仍保持 `epochs=150`、`lr0=1e-4`、AdamW、
+`momentum=0.9`、`weight_decay=1e-4`、`imgsz=640` 和关闭 AMP。
+为改善后期收敛，这个 batch-24 预设启用 cosine 学习率衰减，末期学习率为初始值的
+`0.1`；这是工程调参，不是论文已证实的最优设置。batch 24 每轮的优化器更新次数
+约为 batch 8 的三分之一，不能保证复现论文结果。训练进度实时显示在终端，同时每个
+实验单独保存到 `runs/anti-detr/logs/ddp_<时间>/<模型>.log`；前一个实验成功后才
+启动下一个，失败时停止。如果某个模型仍显存不足，可用
+`MICRO_BATCH=6 DEVICE=1,2,3 bash scripts/train_r18_3gpu_ddp_sequence.sh`，
+此时每卡 micro batch 为 2、累积 4 次，有效全局 batch 仍为 24，但速度会降低。
+需要严格使用全局 batch 8 时，应使用上面的三卡实验队列。
 
 DDP 临时入口会把当前项目根目录放到 `sys.path` 和 `PYTHONPATH` 首位，确保三个 rank
 加载本项目集成了 `ConvNormLayer`、`HIFI`、`MCAM` 等模块的源码，而不是 conda 环境中

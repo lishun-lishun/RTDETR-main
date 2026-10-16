@@ -33,7 +33,8 @@ weight_decay: 0.0001
 # RTDETR-main treats this field as a number of warmup iterations.
 warmup_epochs: 2000
 warmup_momentum: 0.8
-warmup_bias_lr: 0.1
+# AdamW bias parameters should not start 1000x above lr0 during warmup.
+warmup_bias_lr: 0.0
 
 max_det: 300
 mosaic: 0.0
