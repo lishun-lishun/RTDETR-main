@@ -36,10 +36,11 @@ def parse_args():
         help="Models to run; 'all' uses the baseline followed by every anti-detr config.",
     )
     parser.add_argument("--device", default=None, help="For example: 0, 0,1, or cpu.")
-    parser.add_argument("--epochs", type=int, default=None, help="Override the paper/default profile.")
-    parser.add_argument("--batch", type=int, default=None, help="Override the paper/default profile.")
-    parser.add_argument("--imgsz", type=int, default=None, help="Override the paper/default profile.")
-    parser.add_argument("--workers", type=int, default=None, help="Override the paper/default profile.")
+    parser.add_argument("--epochs", type=int, default=None, help="Override training epochs.")
+    parser.add_argument("--batch", type=int, default=None, help="Override global training batch size.")
+    parser.add_argument("--test-batch", type=int, default=None, help="Override evaluation batch size.")
+    parser.add_argument("--imgsz", type=int, default=None, help="Override image size.")
+    parser.add_argument("--workers", type=int, default=None, help="Override data loader workers.")
     parser.add_argument("--lr0", type=float, default=None, help="Override the initial learning rate.")
     parser.add_argument(
         "--warmup-iters",
@@ -80,6 +81,8 @@ def load_experiment_profile(args):
         value = getattr(args, key)
         if value is not None:
             profile[key] = value
+    if args.test_batch is not None:
+        profile["test_batch"] = args.test_batch
     if args.warmup_iters is not None:
         profile["warmup_epochs"] = args.warmup_iters
     if args.device is not None:
@@ -124,7 +127,7 @@ def print_plan(mode, models, profile, args):
     dataset_root = yaml.safe_load(DATA_CONFIG.read_text(encoding="utf-8"))["path"]
     print(f"dataset_root={dataset_root}")
     print(f"experiment_profile={PROFILE_CONFIG}")
-    print("profile_provenance=RTDETR-main defaults; not a complete paper-released training config")
+    print("profile_provenance=user-supplied paper settings plus documented local defaults")
     print("settings=" + ", ".join(f"{key}={value}" for key, value in profile.items()))
     world_size = device_count(profile.get("device"))
     if world_size > 1:
@@ -152,7 +155,7 @@ def train(models, profile, args):
             data=str(DATA_CONFIG),
             project=str(args.train_project),
             name=name,
-            **profile,
+            **{key: value for key, value in profile.items() if key != "test_batch"},
         )
 
 
@@ -167,7 +170,7 @@ def test(models, profile, args):
         metrics = model.val(
             data=str(DATA_CONFIG),
             split=args.split,
-            batch=profile["batch"],
+            batch=profile["test_batch"],
             imgsz=profile["imgsz"],
             workers=profile["workers"],
             max_det=profile["max_det"],

@@ -34,17 +34,19 @@ DOI: `10.1016/j.neucom.2026.132935`）。
 
 当前工程能够严格保持作者仓库公开的 5 份模型 YAML，并让六组实验使用完全相同的
 数据划分和训练参数；但不能称为论文完整模型的严格复现。原因见本文最后的“源仓库
-缺失项说明”。尤其是作者没有发布论文训练超参数文件，因此
-`ultralytics/cfg/anti_detr_default.yaml` 固定的是本 RTDETR-main 分支中与
-RT-DETR/Paddle 对齐的默认协议，而不是冒充论文原始超参数。
+缺失项说明”。`ultralytics/cfg/anti_detr_default.yaml` 中的 epochs、训练和测试 batch、
+图像尺寸、workers、优化器、初始学习率、momentum 与 weight decay 按用户提供的论文
+实验表设置；表中未给出的 warmup、数据增强、初始化等仍是本工程配置，不能据此保证
+论文结果完全复现。该脚本目前只使用 DUT-Anti-UAV；Det-Fly 需要单独的数据配置和实验。
 
 | 参数 | 值 |
 | --- | --- |
-| epochs / batch / image size | `100 / 4 / 640` |
+| epochs / train batch / test batch / image size | `150 / 8 / 16 / 640` |
+| workers | `4` |
 | optimizer | `AdamW` |
-| initial LR / final LR factor | `0.0001 / 1.0` |
+| initial LR / final LR factor | `0.0001 / 1.0`（后者是本工程设置） |
 | momentum / weight decay | `0.9 / 0.0001` |
-| warmup | `2000` iterations |
+| warmup | `2000` iterations（本工程设置） |
 | AMP / mosaic / mixup | `False / 0 / 0` |
 | seed / deterministic | `0 / True` |
 | max detections / queries | `300 / 300` |
@@ -70,8 +72,8 @@ python train_dut_anti_uav.py --mode train --models all --device 0 --dry-run
 
 这个模式同时运行最多 3 个实验，每个实验独占一张卡：第一批按顺序分配
 `original-r18 -> GPU 1`、`anti-r18 -> GPU 2`、`anti-wtconv -> GPU 3`，全部完成后
-再启动第二批 `anti-hifi`、`anti-p2`、`anti-mrfpn`。因为每个实验仍保持单卡
-`batch=4`、`lr0=1e-4` 和 `warmup=2000`，它最适合要求结果与单卡实验接近的场景。
+再启动第二批 `anti-hifi`、`anti-p2`、`anti-mrfpn`。每个实验仍保持训练
+`batch=8`、`lr0=1e-4` 和 `warmup=2000`，适合按论文表中的 batch 做对照。
 
 ```bash
 GPU_LIST=1,2,3 bash scripts/train_r18_3gpu_queue.sh
@@ -89,10 +91,11 @@ GPU_LIST=1,2,3 bash scripts/train_r18_3gpu_queue.sh
 DEVICE=1,2,3 bash scripts/train_r18_3gpu_ddp_sequence.sh
 ```
 
-默认全局 batch 为 12，即每卡 batch 为 4；warmup 从 2000 次缩放为 667 次，使其
-覆盖的样本数与单卡接近。DDP 会减少每个 epoch 的优化器更新次数，因此即使速度更快，
-结果也不可能与单卡数值完全一致。需要最公平的单卡对照时，应优先使用上面的三卡实验
-队列。为保证稳定性，DDP 模式仍关闭 AMP，并保持 `lr0=1e-4`。
+默认全局 batch 为 24，即每卡 8；warmup 从 2000 次缩放为 667 次，使其覆盖的
+样本数接近单卡 batch 8 时的设置。当前训练器要求全局 batch 能被 3 整除，因此无法
+用三卡 DDP 直接保持全局训练 batch 8。全局 batch 24 会减少每个 epoch 的优化器更新
+次数，结果可能与 batch 8 有差异。需要严格使用论文表中的全局 batch 8 时，应使用上面
+的三卡实验队列。DDP 模式保持 `lr0=1e-4` 和关闭 AMP。
 
 DDP 临时入口会把当前项目根目录放到 `sys.path` 和 `PYTHONPATH` 首位，确保三个 rank
 加载本项目集成了 `ConvNormLayer`、`HIFI`、`MCAM` 等模块的源码，而不是 conda 环境中
@@ -139,8 +142,9 @@ INIT_WEIGHTS=/path/to/rtdetr-r18.pt DEVICE=0 \
 DEVICE=0 SPLIT=test bash scripts/test_r18_sequence.sh
 ```
 
-汇总指标保存在 `runs/anti-detr/test/test_summary.csv`。如需临时改变显存相关参数，
-可以传入 `--batch`、`--imgsz` 或 `--workers`；正式论文对照实验应保持默认值。
+测试 batch 默认 16；汇总指标保存在 `runs/anti-detr/test/test_summary.csv`。
+如需临时改变参数，可传入 `--batch`（训练）、`--test-batch`（测试）、`--imgsz`
+或 `--workers`；正式对照实验应保持上述值。
 
 ## 源仓库缺失项说明
 
@@ -154,6 +158,5 @@ DEVICE=0 SPLIT=test bash scripts/test_r18_sequence.sh
 - 论文描述的 GWRN 包含全局多通道注意力；作者代码虽然定义了 `MPA`，发布的
   `rtdetr-WTConv.yaml` 和 `BasicBlock_WTConv` 却没有连接该注意力模块。
 - 作者仓库没有发布把 GWRN、MRFPN 和 HIFI 合并在一起的最终 `anti-detr.yaml`，
-  也没有训练脚本、初始化 checkpoint 或论文超参数文件。因此这里可以严格复现
-  作者公开的 5 份 YAML 和目标工程默认训练协议，但在缺少上述源码时不能宣称严格
-  复现论文的完整最终 Anti-DETR 网络或论文数值结果。
+  也没有训练脚本或初始化 checkpoint。这里按用户提供的论文实验表设置主要超参数，
+  但在缺少上述源码与其余训练细节时，不能宣称严格复现论文完整网络或数值结果。

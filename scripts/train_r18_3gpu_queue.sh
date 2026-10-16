@@ -33,7 +33,7 @@ mkdir -p "${LOG_DIR}"
 echo "GPU queue: ${GPUS[*]}"
 echo "Model order: ${MODELS[*]}"
 echo "Logs: ${LOG_DIR}"
-echo "Each experiment keeps the single-GPU batch/LR profile."
+echo "Each experiment keeps the paper train batch 8 and the configured LR."
 
 # Dispatch models in ordered waves. Up to one single-GPU experiment runs on
 # each GPU, preserving the original per-experiment optimization settings while

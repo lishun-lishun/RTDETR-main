@@ -1,11 +1,12 @@
 # Reproducible local protocol for the released Anti-DETR R18 ablations.
 #
-# Provenance: these values pin RTDETR-main's RT-DETR/Paddle-aligned defaults.
-# The Anti-DETR paper/repository does not publish a complete training config,
-# so this file must not be described as an exact paper hyperparameter profile.
-epochs: 100
+# The epochs, batch sizes, image size, workers, optimizer, learning rate,
+# momentum and weight decay below follow the paper settings supplied for this
+# experiment. Remaining values retain this project's prior local defaults.
+epochs: 150
 patience: 0
-batch: 4
+batch: 8
+test_batch: 16
 imgsz: 640
 cache: false
 workers: 4
