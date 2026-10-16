@@ -41,6 +41,7 @@ echo "Each experiment keeps the paper train batch 8 and the configured LR."
 for ((start = 0; start < ${#MODELS[@]}; start += ${#GPUS[@]})); do
     pids=()
     labels=()
+    log_files=()
     wave=$((start / ${#GPUS[@]} + 1))
     echo "[$(date '+%F %T')] starting wave ${wave}"
 
@@ -52,6 +53,7 @@ for ((start = 0; start < ${#MODELS[@]}; start += ${#GPUS[@]})); do
         DEVICE="${gpu}" bash "${SCRIPT_DIR}/train_r18_one.sh" "${model}" "$@" >"${log_file}" 2>&1 &
         pids+=("$!")
         labels+=("${model}@GPU${gpu}")
+        log_files+=("${log_file}")
     done
 
     failed=0
@@ -61,6 +63,9 @@ for ((start = 0; start < ${#MODELS[@]}; start += ${#GPUS[@]})); do
         else
             status=$?
             echo "[$(date '+%F %T')] FAILED ${labels[i]} (exit ${status})" >&2
+            echo "----- last 60 lines: ${log_files[i]} -----" >&2
+            tail -n 60 "${log_files[i]}" >&2
+            echo "----- end: ${labels[i]} -----" >&2
             failed=1
         fi
     done

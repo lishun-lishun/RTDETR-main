@@ -51,8 +51,10 @@ DOI: `10.1016/j.neucom.2026.132935`）。
 | seed / deterministic | `0 / True` |
 | max detections / queries | `300 / 300` |
 
-训练器还采用与 Paddle RT-DETR 对齐的 `max_norm=0.1` 梯度裁剪，并将名义 batch
-设为实际 batch，避免梯度累积改变各实验的有效 batch。
+训练器采用 `max_norm=0.1` 梯度裁剪。A30 24 GB 上直接以 batch 8 训练已触发
+CUDA 显存不足，因此默认每次前向使用 `micro_batch=4`，累积两次梯度后更新一次，
+有效训练 batch 仍为 8。warmup 的微批次数相应变为 4000，使其覆盖的样本数与原先
+batch 8、2000 次更新相近。梯度累积与单次 batch 8 的数值计算不会完全相同。
 
 所有模型当前都从 YAML 随机初始化。此分支对 YAML 新建模型使用
 `pretrained: true` 时并不会自动加载任何 checkpoint，因此配置中明确写为
@@ -72,8 +74,8 @@ python train_dut_anti_uav.py --mode train --models all --device 0 --dry-run
 
 这个模式同时运行最多 3 个实验，每个实验独占一张卡：第一批按顺序分配
 `original-r18 -> GPU 1`、`anti-r18 -> GPU 2`、`anti-wtconv -> GPU 3`，全部完成后
-再启动第二批 `anti-hifi`、`anti-p2`、`anti-mrfpn`。每个实验仍保持训练
-`batch=8`、`lr0=1e-4` 和 `warmup=2000`，适合按论文表中的 batch 做对照。
+再启动第二批 `anti-hifi`、`anti-p2`、`anti-mrfpn`。每个实验使用实际 micro batch 4，
+梯度累积 2 次，保持有效训练 batch 8 和 `lr0=1e-4`。
 
 ```bash
 GPU_LIST=1,2,3 bash scripts/train_r18_3gpu_queue.sh
@@ -91,8 +93,9 @@ GPU_LIST=1,2,3 bash scripts/train_r18_3gpu_queue.sh
 DEVICE=1,2,3 bash scripts/train_r18_3gpu_ddp_sequence.sh
 ```
 
-默认全局 batch 为 24，即每卡 8；warmup 从 2000 次缩放为 667 次，使其覆盖的
-样本数接近单卡 batch 8 时的设置。当前训练器要求全局 batch 能被 3 整除，因此无法
+默认有效全局 batch 为 24：每次前向总 micro batch 12（每卡 4），累积两次梯度再
+更新一次；warmup 从 2000 次缩放为 667 次更新，使其覆盖的样本数接近单卡有效
+batch 8 时的设置。当前训练器要求 micro batch 能被 3 整除，因此无法
 用三卡 DDP 直接保持全局训练 batch 8。全局 batch 24 会减少每个 epoch 的优化器更新
 次数，结果可能与 batch 8 有差异。需要严格使用论文表中的全局 batch 8 时，应使用上面
 的三卡实验队列。DDP 模式保持 `lr0=1e-4` 和关闭 AMP。
@@ -143,8 +146,9 @@ DEVICE=0 SPLIT=test bash scripts/test_r18_sequence.sh
 ```
 
 测试 batch 默认 16；汇总指标保存在 `runs/anti-detr/test/test_summary.csv`。
-如需临时改变参数，可传入 `--batch`（训练）、`--test-batch`（测试）、`--imgsz`
-或 `--workers`；正式对照实验应保持上述值。
+如需临时改变参数，可传入 `--batch`（有效训练 batch）、`--micro-batch`（实际训练
+batch）、`--test-batch`（测试）、`--imgsz` 或 `--workers`。若 micro batch 4 仍然
+超出显存，可用 `--micro-batch 2`，有效 batch 继续保持 8，但训练会更慢。
 
 ## 源仓库缺失项说明
 

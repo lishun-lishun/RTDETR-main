@@ -38,6 +38,7 @@ def parse_args():
     parser.add_argument("--device", default=None, help="For example: 0, 0,1, or cpu.")
     parser.add_argument("--epochs", type=int, default=None, help="Override training epochs.")
     parser.add_argument("--batch", type=int, default=None, help="Override global training batch size.")
+    parser.add_argument("--micro-batch", type=int, default=None, help="Training images per optimizer accumulation step, across selected GPUs.")
     parser.add_argument("--test-batch", type=int, default=None, help="Override evaluation batch size.")
     parser.add_argument("--imgsz", type=int, default=None, help="Override image size.")
     parser.add_argument("--workers", type=int, default=None, help="Override data loader workers.")
@@ -83,6 +84,8 @@ def load_experiment_profile(args):
             profile[key] = value
     if args.test_batch is not None:
         profile["test_batch"] = args.test_batch
+    if args.micro_batch is not None:
+        profile["micro_batch"] = args.micro_batch
     if args.warmup_iters is not None:
         profile["warmup_epochs"] = args.warmup_iters
     if args.device is not None:
@@ -104,11 +107,26 @@ def validate_profile(mode, profile):
         return
     world_size = device_count(profile.get("device"))
     batch = profile["batch"]
-    if world_size > 1 and batch % world_size:
+    micro_batch = profile["micro_batch"]
+    if batch < 1 or micro_batch < 1 or batch % micro_batch:
         raise SystemExit(
-            f"DDP requires batch to be divisible by GPU count: batch={batch}, GPUs={world_size}. "
-            f"Use --batch {world_size * max(round(batch / world_size), 1)} or another multiple of {world_size}."
+            f"Effective training batch {batch} must be a positive multiple of micro-batch {micro_batch}."
         )
+    if world_size > 1 and micro_batch % world_size:
+        raise SystemExit(
+            f"DDP requires micro-batch to be divisible by GPU count: "
+            f"micro-batch={micro_batch}, GPUs={world_size}."
+        )
+
+
+def training_kwargs(profile):
+    """Translate the effective paper batch to memory-safe optimizer updates."""
+    settings = {key: value for key, value in profile.items() if key not in ("test_batch", "micro_batch")}
+    steps = profile["batch"] // profile["micro_batch"]
+    settings["batch"] = profile["micro_batch"]
+    settings["gradient_accumulation"] = steps
+    settings["warmup_epochs"] = profile["warmup_epochs"] * steps
+    return settings
 
 
 def find_best_weights(project, model_name):
@@ -130,11 +148,15 @@ def print_plan(mode, models, profile, args):
     print("profile_provenance=user-supplied paper settings plus documented local defaults")
     print("settings=" + ", ".join(f"{key}={value}" for key, value in profile.items()))
     world_size = device_count(profile.get("device"))
-    if world_size > 1:
+    if mode == "train":
+        settings = training_kwargs(profile)
         print(
-            f"ddp_world_size={world_size}, global_batch={profile['batch']}, "
-            f"per_gpu_batch={profile['batch'] // world_size}"
+            f"training: effective_batch={profile['batch']}, micro_batch={settings['batch']}, "
+            f"accumulation_steps={settings['gradient_accumulation']}, "
+            f"warmup_micro_steps={settings['warmup_epochs']}, GPUs={world_size}"
         )
+        if world_size > 1:
+            print(f"per_gpu_micro_batch={settings['batch'] // world_size}")
     for name, config in models.items():
         if mode == "test":
             weights = args.weights or "<auto: latest best.pt>"
@@ -146,6 +168,7 @@ def print_plan(mode, models, profile, args):
 def train(models, profile, args):
     from ultralytics import RTDETR
 
+    settings = training_kwargs(profile)
     for name, config in models.items():
         print(f"\n{'=' * 24} TRAIN {name} {'=' * 24}")
         model = RTDETR(str(config))
@@ -155,7 +178,7 @@ def train(models, profile, args):
             data=str(DATA_CONFIG),
             project=str(args.train_project),
             name=name,
-            **{key: value for key, value in profile.items() if key != "test_batch"},
+            **settings,
         )
 
 

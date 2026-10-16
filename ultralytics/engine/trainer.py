@@ -261,8 +261,10 @@ class BaseTrainer:
                 self.plot_training_labels()
 
         # Optimizer
-        self.args.nbs = self.batch_size
-        self.accumulate = max(round(self.args.nbs / self.batch_size), 1)  # accumulate loss before optimizing
+        self.accumulate = self.args.gradient_accumulation
+        if self.accumulate < 1:
+            raise ValueError('gradient_accumulation must be at least 1')
+        self.args.nbs = self.batch_size * self.accumulate
         weight_decay = self.args.weight_decay * self.batch_size * self.accumulate / self.args.nbs  # scale weight_decay
         iterations = math.ceil(len(self.train_loader.dataset) / max(self.batch_size, self.args.nbs)) * self.epochs
         self.optimizer = self.build_optimizer(model=self.model,
@@ -331,7 +333,6 @@ class BaseTrainer:
                 ni = i + nb * epoch
                 if ni <= nw:
                     xi = [0, nw]  # x interp
-                    self.accumulate = max(1, np.interp(ni, xi, [1, self.args.nbs / self.batch_size]).round())
                     for j, x in enumerate(self.optimizer.param_groups):
                         # Bias lr falls from 0.1 to lr0, all other lrs rise from 0.0 to lr0
                         x['lr'] = np.interp(
@@ -349,7 +350,7 @@ class BaseTrainer:
                         else self.loss_items
 
                 # Backward
-                self.scaler.scale(self.loss).backward()
+                self.scaler.scale(self.loss / self.accumulate).backward()
 
                 # Optimize - https://pytorch.org/docs/master/notes/amp_examples.html
                 if ni - last_opt_step >= self.accumulate:
