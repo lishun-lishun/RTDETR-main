@@ -75,8 +75,9 @@ python train_dut_anti_uav.py --mode train --models all --device 0 --dry-run
 
 这个模式同时运行最多 3 个实验，每个实验独占一张卡：第一批按顺序分配
 `original-r18 -> GPU 1`、`anti-r18 -> GPU 2`、`anti-wtconv -> GPU 3`，全部完成后
-再启动第二批 `anti-hifi`、`anti-p2`、`anti-mrfpn`。每个实验使用实际 micro batch 2，
-梯度累积 4 次，保持有效训练 batch 8 和 `lr0=1e-4`。启动脚本会在导入 PyTorch
+再启动第二批 `anti-hifi`、`anti-p2`、`anti-mrfpn`。队列脚本明确传入单卡实际 batch 8，
+梯度累积 1 次，保持有效训练 batch 8 和 `lr0=1e-4`；这与默认配置文件里为显存不足
+预留的 micro batch 2 不同。启动脚本会在导入 PyTorch
 前设置 `CUDA_VISIBLE_DEVICES`，保证每个进程绑定到指定的物理 GPU。
 
 ```bash
@@ -85,7 +86,8 @@ GPU_LIST=1,2,3 bash scripts/train_r18_3gpu_queue.sh
 
 各实验日志单独写入 `runs/anti-detr/logs/<时间>/<模型>_gpu<编号>.log`，并行输出不会
 互相混杂。如果一批中任一实验失败，脚本等待该批其他实验退出后停止，不会继续启动
-下一批。
+下一批。A30 24 GB 上单卡实际 batch 8 尚未验证能否容纳；如果发生 OOM，需改用
+`--micro-batch 2` 等梯度累积方案（有效 batch 仍为 8），或使用更大显存的 GPU。
 
 ### 三卡 DDP 顺序训练（一次只训练一个实验）
 

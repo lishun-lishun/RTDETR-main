@@ -33,7 +33,7 @@ mkdir -p "${LOG_DIR}"
 echo "GPU queue: ${GPUS[*]}"
 echo "Model order: ${MODELS[*]}"
 echo "Logs: ${LOG_DIR}"
-echo "Each experiment keeps the paper train batch 8 and the configured LR."
+echo "Each GPU trains one experiment with physical batch 8, accumulation 1, and the configured LR."
 
 # Dispatch models in ordered waves. Up to one single-GPU experiment runs on
 # each GPU, preserving the original per-experiment optimization settings while
@@ -50,7 +50,8 @@ for ((start = 0; start < ${#MODELS[@]}; start += ${#GPUS[@]})); do
         gpu="${GPUS[slot]}"
         log_file="${LOG_DIR}/${model}_gpu${gpu}.log"
         echo "  dispatch ${model} -> GPU ${gpu} (${log_file})"
-        DEVICE="${gpu}" bash "${SCRIPT_DIR}/train_r18_one.sh" "${model}" "$@" >"${log_file}" 2>&1 &
+        DEVICE="${gpu}" bash "${SCRIPT_DIR}/train_r18_one.sh" "${model}" \
+            --batch 8 --micro-batch 8 "$@" >"${log_file}" 2>&1 &
         pids+=("$!")
         labels+=("${model}@GPU${gpu}")
         log_files+=("${log_file}")
