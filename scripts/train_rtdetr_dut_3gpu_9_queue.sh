@@ -7,6 +7,7 @@ PROJECT_ROOT="$(cd -- "${SCRIPT_DIR}/.." && pwd)"
 PYTHON_BIN="${PYTHON_BIN:-python}"
 GPU_LIST="${GPU_LIST:-1,2,3}"
 MICRO_BATCH="${MICRO_BATCH:-8}"
+ETA_INTERVAL="${ETA_INTERVAL:-60}"
 IFS=',' read -r -a GPUS <<< "${GPU_LIST}"
 
 # Ordered priority: baseline; small-object scale and fusion; isolated encoder,
@@ -39,6 +40,20 @@ if [[ ! "${MICRO_BATCH}" =~ ^[1-9][0-9]*$ ]] || (( 8 % MICRO_BATCH != 0 )); then
     echo "MICRO_BATCH must be a positive divisor of the effective batch 8 (1, 2, 4 or 8)." >&2
     exit 2
 fi
+if [[ ! "${ETA_INTERVAL}" =~ ^[1-9][0-9]*$ ]]; then
+    echo "ETA_INTERVAL must be a positive number of seconds." >&2
+    exit 2
+fi
+
+eta_pid=""
+stop_eta() {
+    if [[ -n "${eta_pid}" ]]; then
+        kill "${eta_pid}" 2>/dev/null || true
+        wait "${eta_pid}" 2>/dev/null || true
+        eta_pid=""
+    fi
+}
+trap stop_eta EXIT
 
 cd "${PROJECT_ROOT}"
 echo "Preflighting nine model configs and DUT training settings..."
@@ -60,6 +75,7 @@ LOG_DIR="${LOG_DIR:-${PROJECT_ROOT}/runs/rtdetr-dut/logs/${RUN_ID}}"
 mkdir -p "${LOG_DIR}"
 echo "Logs: ${LOG_DIR}"
 echo "Each log line is also streamed to this terminal with its experiment/GPU prefix."
+echo "Approximate per-model and full-queue remaining time will update every ${ETA_INTERVAL}s after the first epoch."
 
 for ((start = 0; start < ${#CONFIGS[@]}; start += 3)); do
     wave=$((start / 3 + 1))
@@ -77,15 +93,23 @@ for ((start = 0; start < ${#CONFIGS[@]}; start += 3)); do
         (
             export CUDA_VISIBLE_DEVICES="${gpu}"
             export PYTHONUNBUFFERED=1
-            "${PYTHON_BIN}" -u train_dut_anti_uav.py --mode train \
-                --rt-detr-config "${config}" --device "${gpu}" \
-                --batch 8 --micro-batch "${MICRO_BATCH}" "$@" 2>&1 \
+            {
+                echo "QUEUE_START_UNIX=$(date +%s)"
+                "${PYTHON_BIN}" -u train_dut_anti_uav.py --mode train \
+                    --rt-detr-config "${config}" --device "${gpu}" \
+                    --batch 8 --micro-batch "${MICRO_BATCH}" "$@"
+            } 2>&1 \
                 | sed -u "s/^/[${label}] /" | tee "${log_file}"
         ) &
         pids+=("$!")
         labels+=("${label}")
         log_files+=("${log_file}")
     done
+
+    "${PYTHON_BIN}" -u scripts/rtdetr_dut_queue_eta.py \
+        --log-dir "${LOG_DIR}" --wave "${wave}" --interval "${ETA_INTERVAL}" \
+        --configs "${CONFIGS[@]}" --gpus "${GPUS[@]}" &
+    eta_pid="$!"
 
     failed=0
     for i in "${!pids[@]}"; do
@@ -99,6 +123,7 @@ for ((start = 0; start < ${#CONFIGS[@]}; start += 3)); do
             failed=1
         fi
     done
+    stop_eta
     if (( failed )); then
         echo "Wave ${wave} failed. Later waves were not started; inspect ${LOG_DIR}." >&2
         exit 1
