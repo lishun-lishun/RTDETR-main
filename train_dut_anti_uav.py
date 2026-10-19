@@ -1,4 +1,4 @@
-"""Train or test the RT-DETR-R18 baseline and all author-released anti-detr configs."""
+"""Train or test RT-DETR configurations on the DUT-Anti-UAV dataset."""
 
 import argparse
 import csv
@@ -10,8 +10,13 @@ import yaml
 
 ROOT = Path(__file__).resolve().parent
 ANTI_MODEL_DIR = ROOT / "ultralytics" / "cfg" / "models" / "anti-detr"
+RTDETR_MODEL_DIR = ROOT / "ultralytics" / "cfg" / "models" / "rt-detr"
 DATA_CONFIG = ROOT / "dataset" / "DUT-Anti-UAV.yaml"
 PROFILE_CONFIG = ROOT / "ultralytics" / "cfg" / "anti_detr_default.yaml"
+DEFAULT_TRAIN_PROJECT = ROOT / "runs" / "anti-detr" / "train"
+DEFAULT_TEST_PROJECT = ROOT / "runs" / "anti-detr" / "test"
+RTDETR_TRAIN_PROJECT = ROOT / "runs" / "rtdetr-dut" / "train"
+RTDETR_TEST_PROJECT = ROOT / "runs" / "rtdetr-dut" / "test"
 
 # Keep the baseline separate from anti-r18 even though their released topologies
 # are identical. This makes the baseline/control experiment explicit in reports.
@@ -34,6 +39,13 @@ def parse_args():
         choices=("all", *MODEL_CONFIGS),
         default=("all",),
         help="Models to run; 'all' uses the baseline followed by every anti-detr config.",
+    )
+    parser.add_argument(
+        "--rt-detr-config",
+        nargs="+",
+        metavar="YAML",
+        help="One or more YAML filenames from ultralytics/cfg/models/rt-detr. "
+             "This selects them instead of the anti-detr experiment list.",
     )
     parser.add_argument("--device", default=None, help="For example: 0, 0,1, or cpu.")
     parser.add_argument("--epochs", type=int, default=None, help="Override training epochs.")
@@ -65,12 +77,12 @@ def parse_args():
     parser.add_argument(
         "--train-project",
         type=Path,
-        default=ROOT / "runs" / "anti-detr" / "train",
+        default=DEFAULT_TRAIN_PROJECT,
     )
     parser.add_argument(
         "--test-project",
         type=Path,
-        default=ROOT / "runs" / "anti-detr" / "test",
+        default=DEFAULT_TEST_PROJECT,
     )
     parser.add_argument("--dry-run", action="store_true", help="Print the plan without loading PyTorch.")
     return parser.parse_args()
@@ -80,6 +92,22 @@ def selected_models(names):
     if "all" in names:
         return MODEL_CONFIGS
     return {name: MODEL_CONFIGS[name] for name in names}
+
+
+def selected_rtdetr_configs(filenames):
+    """Select model-zoo YAMLs without allowing paths outside the RT-DETR catalog."""
+    selected = {}
+    for filename in filenames:
+        if Path(filename).name != filename or not filename.endswith(".yaml"):
+            raise SystemExit(f"Expected a YAML filename in {RTDETR_MODEL_DIR}: {filename!r}")
+        config = RTDETR_MODEL_DIR / filename
+        if not config.is_file():
+            raise SystemExit(f"RT-DETR configuration does not exist: {config}")
+        name = f"rt-detr-{config.stem.removeprefix('rtdetr-')}"
+        if name in selected:
+            raise SystemExit(f"Duplicate RT-DETR experiment name: {name}")
+        selected[name] = config
+    return selected
 
 
 def load_experiment_profile(args):
@@ -136,7 +164,10 @@ def training_kwargs(profile):
 
 
 def find_best_weights(project, model_name):
-    candidates = list(project.glob(f"{model_name}*/weights/best.pt"))
+    candidates = [
+        path for path in project.glob(f"{model_name}*/weights/best.pt")
+        if (suffix := path.parent.parent.name[len(model_name):]) == "" or suffix.isdecimal()
+    ]
     if not candidates:
         raise FileNotFoundError(
             f"No best.pt found for {model_name!r} below {project}. "
@@ -151,6 +182,8 @@ def print_plan(mode, models, profile, args):
     dataset_root = yaml.safe_load(DATA_CONFIG.read_text(encoding="utf-8"))["path"]
     print(f"dataset_root={dataset_root}")
     print(f"experiment_profile={PROFILE_CONFIG}")
+    print(f"train_project={args.train_project}")
+    print(f"test_project={args.test_project}")
     print("profile_provenance=user-supplied paper settings plus documented local defaults")
     print("settings=" + ", ".join(f"{key}={value}" for key, value in profile.items()))
     world_size = device_count(profile.get("device"))
@@ -225,7 +258,16 @@ def test(models, profile, args):
 
 def main():
     args = parse_args()
-    models = selected_models(args.models)
+    if args.rt_detr_config:
+        if list(args.models) != ["all"]:
+            raise SystemExit("Use either --rt-detr-config or --models, not both")
+        models = selected_rtdetr_configs(args.rt_detr_config)
+        if args.train_project == DEFAULT_TRAIN_PROJECT:
+            args.train_project = RTDETR_TRAIN_PROJECT
+        if args.test_project == DEFAULT_TEST_PROJECT:
+            args.test_project = RTDETR_TEST_PROJECT
+    else:
+        models = selected_models(args.models)
     if args.weights is not None and len(models) != 1:
         raise SystemExit("--weights can only be used with one explicitly selected model")
     if "anti-mrfpn" in models:
