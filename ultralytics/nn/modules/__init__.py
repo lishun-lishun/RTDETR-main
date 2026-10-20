@@ -21,6 +21,7 @@ from .block import *
 from .conv import *
 from .head import *
 from .transformer import *
+from .baps_rdcf import *
 
 # __all__ = ('Conv', 'Conv2', 'LightConv', 'RepConv', 'DWConv', 'DWConvTranspose2d', 'ConvTranspose', 'Focus',
 #            'GhostConv', 'ChannelAttention', 'SpatialAttention', 'CBAM', 'Concat', 'TransformerLayer',

@@ -862,6 +862,18 @@ def parse_model(d, ch, verbose=True, warehouse_manager=None):  # model_dict, inp
             args = [ch[f]]
         elif m in {Concat}:
             c2 = sum(ch[x] for x in f)
+        elif m is BAPS:
+            # Multi-input pluggable module: from [p2_idx, p3_idx] -> c_p3.
+            # args: (c_p2, c_p3, hidden_channels). Output channels = c_p3.
+            c1 = [ch[x] for x in f]
+            c2 = c1[1]
+            args = [*c1, *args]
+        elif m is RDCF:
+            # Multi-input pluggable module: from [f3_idx, p2_idx, f4_idx] -> c_p3.
+            # args: (c_p3, c_p2, c_p4, hidden_channels). Output channels = c_p3.
+            c1 = [ch[x] for x in f]
+            c2 = c1[0]
+            args = [*c1, *args]
         elif m in (Detect, Segment, Pose):
             args.append([ch[x] for x in f])
             if m is Segment:
