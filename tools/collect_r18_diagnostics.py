@@ -408,7 +408,9 @@ class _BAPSCollector:
             self.handles.append(module.anti_conv.register_forward_hook(self._on_anti))
 
     def _on_module(self, m, inp, out):
-        p2, p3 = inp
+        # BAPS.forward(x) 接收单个 list 参数 x=[p2, p3]; forward hook 的 inp
+        # 是 (x,) 这样的单元素 tuple, 需先取 inp[0] 再解包。
+        p2, p3 = inp[0]
         self.p2_stats.append(tensor_stats(p2))
         self.p3_stats.append(tensor_stats(p3))
         self.out_stats.append(tensor_stats(out))
@@ -535,7 +537,9 @@ class _RDCFCollector:
             self.handles.append(module.d4_conv.register_forward_hook(self._on_d4))
 
     def _on_module(self, m, inp, out):
-        f3, p2, f4 = inp
+        # RDCF.forward(x) 接收单个 list 参数 x=[f3, p2, f4]; forward hook 的
+        # inp 是 (x,) 这样的单元素 tuple, 需先取 inp[0] 再解包。
+        f3, p2, f4 = inp[0]
         self.f3_stats.append(tensor_stats(f3))
         self.p2_stats.append(tensor_stats(p2))
         self.f4_stats.append(tensor_stats(f4))
