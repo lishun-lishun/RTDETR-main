@@ -874,6 +874,18 @@ def parse_model(d, ch, verbose=True, warehouse_manager=None):  # model_dict, inp
             c1 = [ch[x] for x in f]
             c2 = c1[0]
             args = [*c1, *args]
+        elif m is LSCE:
+            # Single-input pluggable module: from [-1] -> P2. Output channels = input.
+            # args: (channels, hidden_channels). Output channels = channels.
+            c1 = ch[f]
+            c2 = c1
+            args = [c1, *args]
+        elif m is ADCF:
+            # Multi-input pluggable module: from [f3_idx, f4_idx] -> c_p3.
+            # args: (c_p3, c_p4, hidden_channels). Output channels = c_p3.
+            c1 = [ch[x] for x in f]
+            c2 = c1[0]
+            args = [*c1, *args]
         elif m in (Detect, Segment, Pose):
             args.append([ch[x] for x in f])
             if m is Segment:
