@@ -6,21 +6,20 @@
 
 用法示例
 ---------
-基本结构审计 + 少量特征采集 (basic 模式, 不跑完整测试集)::
+直接一条命令跑全部 (权重路径已硬编码 + 自动查找 runs/, 无需传权重)::
 
+    python tools/collect_r18_diagnostics.py
+
+    # 等价于 (默认会按 baseline/baps/rdcf 三个角色自动解析权重):
+    python tools/collect_r18_diagnostics.py --mode full
+
+    # 也可以显式覆盖某个权重路径:
     python tools/collect_r18_diagnostics.py \\
-        --baseline-weights runs/rtdetr-r18/train/weights/best.pt \\
-        --baps-weights     runs/rtdetr-r18-baps/train/weights/best.pt \\
-        --rdcf-weights     runs/rtdetr-r18-rdcf/train/weights/best.pt \\
-        --data dataset/DUT-Anti-UAV.yaml --mode basic
+        --baseline-weights /path/to/best.pt --mode basic
 
-完整分析 (full 模式, 含完整测试集预测 + 错误分析)::
-
-    python tools/collect_r18_diagnostics.py \\
-        --baseline-weights runs/rtdetr-r18/train/weights/best.pt \\
-        --baps-weights     runs/rtdetr-r18-baps/train/weights/best.pt \\
-        --rdcf-weights     runs/rtdetr-r18-rdcf/train/weights/best.pt \\
-        --data dataset/DUT-Anti-UAV.yaml --mode full
+权重解析顺序: 命令行参数 > 脚本顶部 ``_WEIGHT_SPECS`` 里硬编码的候选路径 >
+在 ``runs/`` 下按关键词自动搜索 ``best.pt``。若服务器目录名不同, 改 ``_WEIGHT_SPECS``
+即可, 无需改动其它代码。
 
 设计要点
 --------
@@ -73,6 +72,66 @@ torch_softmax = torch.softmax
 torch_sigmoid = torch.sigmoid
 torch_argsort = torch.argsort
 torch_inference_mode = torch.inference_mode
+
+# --------------------------------------------------------------------------- #
+# 三个模型的权重路径 (硬编码默认, 直接一条命令跑全部)
+# 解析顺序: 命令行参数 > 硬编码候选路径 > 在 runs/ 下自动搜索 best.pt。
+# 候选路径相对项目根 (tools/ 的上一级) 解析, 与服务器上的 rtdetr-dut 训练目录约定一致。
+# 若服务器上目录名不同, 只需改 _WEIGHT_SPECS 里的 candidates / keywords 即可。
+# --------------------------------------------------------------------------- #
+_WEIGHT_SPECS = {
+    # E0 原始 R18 基线 (rtdetr-r18.yaml)
+    "baseline": {
+        "candidates": [
+            "runs/rtdetr-dut/train/rt-detr-r18/weights/best.pt",
+            "runs/anti-detr/train/original-r18/weights/best.pt",
+        ],
+        "keywords": ["rt-detr-r18", "original-r18"],
+        "exclude": ["baps", "rdcf"],
+    },
+    # E1 BAPS (rtdetr_r18_baps.yaml)
+    "baps": {
+        "candidates": [
+            "runs/rtdetr-dut/train/rt-detr-rtdetr_r18_baps/weights/best.pt",
+        ],
+        "keywords": ["baps"],
+        "exclude": ["baps_rdcf"],
+    },
+    # E2 RDCF (rtdetr_r18_rdcf.yaml)
+    "rdcf": {
+        "candidates": [
+            "runs/rtdetr-dut/train/rt-detr-rtdetr_r18_rdcf/weights/best.pt",
+        ],
+        "keywords": ["rdcf"],
+        "exclude": ["baps_rdcf"],
+    },
+}
+
+
+def resolve_weight_path(kind: str, explicit) -> str | None:
+    """解析某个模型的权重路径: 命令行 > 硬编码候选 > runs/ 自动搜索。"""
+    if explicit:
+        return str(explicit)
+    spec = _WEIGHT_SPECS.get(kind, {})
+    # 1) 硬编码候选路径 (相对项目根)
+    for rel in spec.get("candidates", []):
+        p = _PROJECT_ROOT / rel
+        if p.is_file():
+            return str(p)
+    # 2) 自动搜索 runs/ 下所有 best.pt, 用关键词过滤
+    hits = []
+    for p in _PROJECT_ROOT.glob("runs/**/*/weights/best.pt"):
+        s = str(p).lower()
+        if not any(k in s for k in spec.get("keywords", [])):
+            continue
+        if any(e in s for e in spec.get("exclude", [])):
+            continue
+        hits.append(p)
+    if hits:
+        hits.sort(key=lambda p: p.stat().st_mtime, reverse=True)
+        return str(hits[0])
+    return None
+
 
 # --------------------------------------------------------------------------- #
 # 日志: 同时输出到 stdout 与 execution_log.txt
@@ -702,6 +761,10 @@ def run_predictions(model, dataloader, device, imgsz, conf_thr, max_images):
     with torch_inference_mode():
         for bi, batch in enumerate(dataloader):
             im = batch["img"].to(device)
+            # 与官方 val 的 BaseValidator.preprocess 对齐: Format 输出的是 0-255 的
+            # uint8 张量, 需转 float 并除以 255, 否则会报
+            # "Input type (ByteTensor) and weight type (FloatTensor) should be the same"。
+            im = im.float() / 255.0
             y, _ = model(im)
             preds = postprocess_rtdetr(y, imgsz, conf_thr)
             for i in range(im.shape[0]):
@@ -878,9 +941,9 @@ def analyze_results(model_name, results, imgsz, iou_thr):
 # --------------------------------------------------------------------------- #
 def parse_args():
     p = argparse.ArgumentParser(description="RT-DETR-R18 BAPS/RDCF 诊断采集")
-    p.add_argument("--baseline-weights", type=str, default=None, help="E0 原始 R18 best.pt 路径")
-    p.add_argument("--baps-weights", type=str, default=None, help="E1 BAPS best.pt 路径")
-    p.add_argument("--rdcf-weights", type=str, default=None, help="E2 RDCF best.pt 路径")
+    p.add_argument("--baseline-weights", type=str, default=None, help="E0 原始 R18 best.pt 路径 (默认自动查找 runs/)")
+    p.add_argument("--baps-weights", type=str, default=None, help="E1 BAPS best.pt 路径 (默认自动查找 runs/)")
+    p.add_argument("--rdcf-weights", type=str, default=None, help="E2 RDCF best.pt 路径 (默认自动查找 runs/)")
     p.add_argument("--data", type=str, default="dataset/DUT-Anti-UAV.yaml", help="数据 yaml 路径")
     p.add_argument("--device", type=str, default="0", help="cuda 设备, 如 0 或 cpu")
     p.add_argument("--imgsz", type=int, default=640, help="输入尺寸")
@@ -898,14 +961,20 @@ def parse_args():
 def main():
     args = parse_args()
 
-    weights = {
-        "baseline": args.baseline_weights,
-        "baps": args.baps_weights,
-        "rdcf": args.rdcf_weights,
-    }
-    weights = {k: v for k, v in weights.items() if v}
+    weights = {}
+    for kind, explicit in (
+        ("baseline", args.baseline_weights),
+        ("baps", args.baps_weights),
+        ("rdcf", args.rdcf_weights),
+    ):
+        p = resolve_weight_path(kind, explicit)
+        if p:
+            weights[kind] = p
+            log(f"[权重] {kind:<8} -> {p}")
+        else:
+            log(f"[warn] 未找到 [{kind}] 的权重, 跳过 (可用 --{kind}-weights 手动指定)")
     if not weights:
-        log("错误: 至少提供一个权重 (--baseline-weights / --baps-weights / --rdcf-weights)")
+        log("错误: 未找到任何权重 (--baseline-weights / --baps-weights / --rdcf-weights)")
         sys.exit(2)
 
     out_dir = Path(args.output)
@@ -1080,6 +1149,7 @@ def _run_behavior_sampling(model, baps_collectors, rdcf_collectors, device, args
             if bi >= n:
                 break
             im = batch["img"].to(device)
+            im = im.float() / 255.0  # 与官方 val preprocess 对齐, 见 run_predictions 注释
             _ = model(im)
             # GT -> 特征图坐标, 供区域统计
             gt_boxes_np = xywh2xyxy(batch["bboxes"][batch["batch_idx"] == 0]).cpu().numpy().astype(np.float32)
