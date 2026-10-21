@@ -52,6 +52,14 @@ import numpy as np
 import torch
 import torch.nn as nn
 
+# 确保优先加载本仓库的 ultralytics fork (含 BAPS/RDCF 与 attempt_load_one_weight),
+# 而不是 pip 安装到 site-packages 的官方 ultralytics。
+# 脚本位于 tools/ 下, 项目根目录是其上一级目录; 若直接以 `python tools/xxx.py`
+# 运行, cwd 也可能不是项目根, 故用 __file__ 反推, 而非依赖 cwd。
+_PROJECT_ROOT = Path(__file__).resolve().parents[1]
+if str(_PROJECT_ROOT) not in sys.path:
+    sys.path.insert(0, str(_PROJECT_ROOT))
+
 from ultralytics.nn.tasks import attempt_load_one_weight
 from ultralytics.nn.modules.baps_rdcf import BAPS, RDCF
 from ultralytics.utils.ops import xywh2xyxy
