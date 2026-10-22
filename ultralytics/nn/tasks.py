@@ -886,6 +886,13 @@ def parse_model(d, ch, verbose=True, warehouse_manager=None):  # model_dict, inp
             c1 = [ch[x] for x in f]
             c2 = c1[0]
             args = [*c1, *args]
+        elif m is PHR:
+            # Multi-input pluggable backbone: from [p2_idx, p3_idx, p4_idx] -> c_p3.
+            # args: (c_p2, c_p3, c_p4, hr_channels, num_hr_blocks, use_p3_feedback, use_p4_feedback).
+            # Output channels = c_p3 (the enhanced P3 fed into the Neck P3 lateral).
+            c1 = [ch[x] for x in f]
+            c2 = c1[1]
+            args = [*c1, *args]
         elif m in (Detect, Segment, Pose):
             args.append([ch[x] for x in f])
             if m is Segment:
