@@ -12,6 +12,12 @@ import yaml
 
 
 class YAMLTopologyTests(unittest.TestCase):
+    def test_baseline_args_rejects_directory_with_clear_message(self):
+        from tools.scre_splf_common import read_baseline_args
+
+        with self.assertRaisesRegex(ValueError, "must point to the original R18 args.yaml file"):
+            read_baseline_args(ROOT)
+
     def test_all_five_variants_keep_original_main_path(self):
         from tools.generate_scre_splf_yaml import BASELINE, make, shift_from
 

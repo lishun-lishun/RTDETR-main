@@ -15,8 +15,10 @@ from pathlib import Path
 import yaml
 
 from scre_splf_common import (DATA_CONFIG, MODEL_DIR, OUTPUT_ROOT, PROFILE_CONFIG, ROOT,
-                              VARIANTS, main_layer_indices, read_baseline_args,
+                              VARIANTS, ensure_local_ultralytics, main_layer_indices, read_baseline_args,
                               transfer_baseline, write_json, yaml_path)
+
+LOCAL_ULTRALYTICS = ensure_local_ultralytics()
 
 
 def parse_args():
@@ -58,8 +60,12 @@ def main():
     args = parse_args()
     cfg = yaml_path(args.model)
     output = args.project_root / args.protocol / args.model / "train"
-    baseline_record = read_baseline_args(args.baseline_args) if args.baseline_args else None
+    try:
+        baseline_record = read_baseline_args(args.baseline_args) if args.baseline_args else None
+    except ValueError as exc:
+        raise SystemExit(str(exc)) from exc
     print(f"model={args.model} config={cfg}")
+    print(f"ultralytics_package={LOCAL_ULTRALYTICS}")
     print(f"protocol={args.protocol} output={output} device={args.device}")
     print(f"dataset={DATA_CONFIG}")
     print(f"baseline_args={args.baseline_args or '<required for --train>'}")
@@ -98,6 +104,7 @@ def main():
 
     settings = settings_from_baseline(baseline_record, args)
     metadata = {"model": args.model, "config": str(cfg.resolve()), "protocol": args.protocol,
+                "ultralytics_package": str(LOCAL_ULTRALYTICS),
                 "dataset": str(DATA_CONFIG.resolve()), "baseline_args": str(args.baseline_args.resolve()),
                 "baseline_weights": str(args.baseline_weights.resolve()) if args.baseline_weights else None,
                 "settings": settings, "auxiliary": yaml.safe_load(cfg.read_text(encoding="utf-8"))["scre_splf"],

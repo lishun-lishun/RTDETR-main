@@ -6,8 +6,10 @@ import datetime as dt
 import sys
 from pathlib import Path
 
-from scre_splf_common import DATA_CONFIG, OUTPUT_ROOT, VARIANTS, write_json
+from scre_splf_common import DATA_CONFIG, OUTPUT_ROOT, VARIANTS, ensure_local_ultralytics, write_json
 from scre_splf_metrics import write_csv
+
+ensure_local_ultralytics()
 
 
 def main():

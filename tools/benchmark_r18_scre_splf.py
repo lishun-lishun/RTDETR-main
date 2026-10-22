@@ -7,7 +7,9 @@ import statistics
 import time
 from pathlib import Path
 
-from scre_splf_common import OUTPUT_ROOT, VARIANTS, write_json
+from scre_splf_common import OUTPUT_ROOT, VARIANTS, ensure_local_ultralytics, write_json
+
+ensure_local_ultralytics()
 
 
 def main():

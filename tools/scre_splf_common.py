@@ -1,7 +1,9 @@
 """Shared paths and checkpoint helpers for the SCRE/SPLF experiments."""
 
 import json
+import importlib.util
 import re
+import sys
 from pathlib import Path
 
 import yaml
@@ -24,6 +26,23 @@ BACKBONE_COUNT = len(BASELINE_YAML["backbone"])
 BASE_DECODER_INDEX = BACKBONE_COUNT + len(BASELINE_YAML["head"]) - 1
 
 
+def ensure_local_ultralytics():
+    """Use this repository's patched package, not the conda site-package.
+
+    Running ``python tools/script.py`` puts ``tools/`` (not the repository
+    root) at sys.path[0]. Without this guard, tests can pass against the local
+    package while the actual training process silently imports a different
+    Ultralytics installation.
+    """
+    sys.path.insert(0, str(ROOT))
+    spec = importlib.util.find_spec("ultralytics")
+    expected = (ROOT / "ultralytics" / "__init__.py").resolve()
+    actual = Path(spec.origin).resolve() if spec and spec.origin else None
+    if actual != expected:
+        raise RuntimeError(f"Expected local Ultralytics at {expected}, but Python resolved {actual}")
+    return actual
+
+
 def yaml_path(variant):
     return MODEL_DIR / VARIANTS[variant]
 
@@ -31,7 +50,11 @@ def yaml_path(variant):
 def read_baseline_args(path):
     if path is None:
         raise ValueError("A real baseline args.yaml is required for training parity")
-    args = yaml.safe_load(Path(path).read_text(encoding="utf-8"))
+    path = Path(path)
+    if not path.is_file():
+        raise ValueError(f"--baseline-args must point to the original R18 args.yaml file, not a directory "
+                         f"or missing path: {str(path)!r}. If using $BASE_ARGS, set it in this shell first.")
+    args = yaml.safe_load(path.read_text(encoding="utf-8"))
     if not isinstance(args, dict):
         raise ValueError(f"Invalid baseline args.yaml: {path}")
     expected = {"epochs": 150, "imgsz": 640, "optimizer": "AdamW", "lr0": 0.0001,
