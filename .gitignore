@@ -141,6 +141,9 @@ datasets/
 runs/
 wandb/
 tests/
+!/tests/
+/tests/*
+!/tests/test_scre_splf.py
 .DS_Store
 
 # Neural Network weights -----------------------------------------------------------------------------------------------

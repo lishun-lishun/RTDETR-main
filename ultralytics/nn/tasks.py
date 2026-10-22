@@ -10,6 +10,7 @@ import torch
 import torch.nn as nn
 
 from ultralytics.nn.modules import *
+from ultralytics.nn.modules.scre_splf_loss import auxiliary_losses
 from ultralytics.nn.extra_modules import *
 from ultralytics.utils import DEFAULT_CFG_DICT, DEFAULT_CFG_KEYS, LOGGER, colorstr, emojis, yaml_load
 from ultralytics.utils.checks import check_requirements, check_suffix, check_yaml
@@ -502,7 +503,24 @@ class RTDETRDetectionModel(DetectionModel):
                      loss_moe += m.aux_loss
         loss.update({'loss_moe': loss_moe * 1.5})
 
-        # NOTE: There are like 12 losses in RTDETR, backward with all losses but only show the main three losses.
+        # Keep the original RT-DETR criterion untouched. For the opt-in
+        # SCRE/SPLF YAMLs, add and log the three explicitly weighted terms.
+        auxiliary_config = self.yaml.get('scre_splf')
+        if auxiliary_config:
+            scre = next((m for m in self.model if isinstance(m, SCRE)), None)
+            fusion = next((m for m in self.model if isinstance(m, (SPLF, SCREFixedFusion))), None)
+            try:
+                center, offset, protect = auxiliary_losses(batch, auxiliary_config, scre, fusion)
+            finally:
+                if scre is not None:
+                    scre.last = None
+                if fusion is not None:
+                    fusion.last = None
+            items = [loss[k].detach() for k in ('loss_giou', 'loss_class', 'loss_bbox')]
+            items.extend((center.detach(), offset.detach(), protect.detach()))
+            return sum(loss.values()) + center + offset + protect, torch.stack(items)
+
+        # NOTE: There are ~12 RT-DETR losses; all are optimized, only three shown.
         return sum(loss.values()), torch.as_tensor([loss[k].detach() for k in ['loss_giou', 'loss_class', 'loss_bbox']],
                                                    device=img.device)
 
@@ -1022,6 +1040,14 @@ def parse_model(d, ch, verbose=True, warehouse_manager=None):  # model_dict, inp
         elif m in {PSA}:
             c2 = ch[f]
             args = [c2, *args]
+        elif m is SCRE:
+            channels = [ch[x] for x in f]
+            c2 = int(args[0]) + 1
+            args = [*channels, *args]
+        elif m in {SPLF, SCREFixedFusion}:
+            channels = [ch[x] for x in f] if isinstance(f, list) else [ch[f]]
+            c2 = channels[0]
+            args = [channels[0], channels[1] if len(channels) > 1 else None, *args]
         elif m in {SBA, MCAM}:
             c1 = [ch[x] for x in f]
             c2 = c1[-1]

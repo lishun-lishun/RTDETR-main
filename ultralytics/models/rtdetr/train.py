@@ -77,7 +77,10 @@ class RTDETRTrainer(DetectionTrainer):
         Returns:
             (RTDETRValidator): Validator object for model validation.
         """
-        self.loss_names = 'giou_loss', 'cls_loss', 'l1_loss'
+        model = self.model.module if hasattr(self.model, 'module') else self.model
+        self.loss_names = ('giou_loss', 'cls_loss', 'l1_loss')
+        if getattr(model, 'yaml', {}).get('scre_splf'):
+            self.loss_names += ('center_loss', 'offset_loss', 'protect_loss')
         return RTDETRValidator(self.test_loader, save_dir=self.save_dir, args=copy(self.args))
 
     def preprocess_batch(self, batch):
