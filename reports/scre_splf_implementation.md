@@ -85,3 +85,11 @@ forward latency/peak memory. Its PyTorch-profiler FLOPs and MACs are marked
 *incomplete estimates* because sparse kernels such as TopK, grid sampling and
 scatter are not fully counted. Report those timings separately; do not call
 them exact whole-model GFLOPs.
+
+The repository's final checkpoint validation uses `AutoBackend.warmup`. Its
+original `torch.empty` dummy input could contain non-finite uninitialized
+values, which SCRE offsets can turn into an invalid scatter index. Warmup now
+uses a zero tensor of the same shape/dtype/device. This does not change
+training or dataset inference. If an existing checkpoint still fails with the
+zero-input warmup, inspect its floating-point state tensors for NaN/Inf before
+claiming a usable best model; do not silently replace non-finite predictions.

@@ -225,6 +225,29 @@ class SCRESPLFTests(unittest.TestCase):
             gc.collect()
 
     @unittest.skipUnless(torch is not None and torch.cuda.is_available(), "CUDA/A30 required")
+    def test_autobackend_warmup_uses_finite_image(self):
+        from ultralytics.nn.autobackend import AutoBackend
+
+        class DummyBackend:
+            pt = True
+            jit = onnx = engine = saved_model = pb = triton = nn_module = False
+            device = torch.device("cuda")
+            fp16 = False
+
+            def __init__(self):
+                self.seen = 0
+
+            def forward(self, image):
+                self.seen += 1
+                self_test.assertTrue(torch.isfinite(image).all())
+                self_test.assertEqual(int(torch.count_nonzero(image)), 0)
+
+        self_test = self
+        backend = DummyBackend()
+        AutoBackend.warmup(backend, (1, 3, 64, 64))
+        self.assertEqual(backend.seen, 1)
+
+    @unittest.skipUnless(torch is not None and torch.cuda.is_available(), "CUDA/A30 required")
     def test_cuda_amp_and_full_decoder_hooks(self):
         from tools.scre_splf_common import yaml_path
         from ultralytics.nn.tasks import RTDETRDetectionModel
