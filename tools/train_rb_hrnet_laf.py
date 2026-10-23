@@ -1,12 +1,16 @@
 """Train the new Ultralytics RT-DETR variants in this RTDETR-main tree."""
 import argparse
 import gc
+import os
 from pathlib import Path
 import subprocess
 import sys
 
 
 ROOT = Path(__file__).resolve().parents[1]
+# Direct execution sets sys.path[0] to tools/, which can otherwise select an
+# older Ultralytics installation from site-packages instead of this checkout.
+sys.path.insert(0, str(ROOT))
 CONFIGS = {
     'hrnet_w18': 'rtdetr_hrnet_w18.yaml',
     'rb_hrnet_a': 'rtdetr_rb_hrnet_a.yaml',
@@ -20,8 +24,14 @@ CONFIGS = {
 def preflight(config):
     """Fail before training if the YAML graph or decoder connection is wrong."""
     import torch
+    import ultralytics
     from ultralytics import RTDETR
 
+    local_package = (ROOT / 'ultralytics').resolve()
+    loaded_package = Path(ultralytics.__file__).resolve().parent
+    if loaded_package != local_package:
+        raise RuntimeError(
+            f'Expected Ultralytics from {local_package}, got {loaded_package}')
     network = RTDETR(str(config)).model.eval()
     incoming = []
     hook = network.model[-1].register_forward_pre_hook(
@@ -58,7 +68,10 @@ def main():
     if not args.dry_run:
         config = ROOT / 'ultralytics/cfg/models/rt-detr' / CONFIGS[args.model]
         preflight(config)
-        subprocess.run(cmd, cwd=ROOT, check=True)
+        env = os.environ.copy()
+        env['PYTHONPATH'] = os.pathsep.join(
+            filter(None, (str(ROOT), env.get('PYTHONPATH'))))
+        subprocess.run(cmd, cwd=ROOT, env=env, check=True)
 
 
 if __name__ == '__main__':
