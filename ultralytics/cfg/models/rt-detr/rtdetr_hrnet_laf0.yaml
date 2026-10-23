@@ -1,0 +1,30 @@
+# RT-DETR R18 experiment family: independent HRNet/LAF candidate.
+nc: 80
+scales:
+  l: [1.00, 1.00, 1024]
+backbone:
+  - [-1, 1, HRNetV2W18, [false]] # 0, [P3,P4,P5]
+  - [0, 1, HRNetFeature, [0]] # 1 P3/8
+  - [0, 1, HRNetFeature, [1]] # 2 P4/16
+  - [0, 1, HRNetFeature, [2]] # 3 P5/32
+head:
+  - [3, 1, Conv, [256, 1, 1, None, 1, 1, False]] # 4 P5 projection
+  - [-1, 1, AIFI, [1024, 8]] # 5
+  - [-1, 1, Conv, [256, 1, 1]] # 6 Y5
+  - [-1, 1, nn.Upsample, [None, 2, nearest]] # 7
+  - [2, 1, Conv, [256, 1, 1, None, 1, 1, False]] # 8 P4 projection
+  - [[7, 8], 1, Concat, [1]] # 9
+  - [-1, 3, RepC3, [256, 0.5]] # 10
+  - [-1, 1, Conv, [256, 1, 1]] # 11 Y4
+  - [1, 1, Conv, [256, 1, 1, None, 1, 1, False]] # 12 P3 projection
+  - [[11, 12], 1, DynamicUpsample, [0.5]] # 13 P4 to P3
+  - [[13, 12], 1, Concat, [1]] # 14
+  - [-1, 3, RepC3, [256, 0.5]] # 15 F3
+  - [-1, 1, Conv, [256, 3, 2]] # 16
+  - [[16, 11], 1, Concat, [1]] # 17
+  - [-1, 3, RepC3, [256, 0.5]] # 18 F4
+  - [-1, 1, Conv, [256, 3, 2]] # 19
+  - [[19, 6], 1, Concat, [1]] # 20
+  - [-1, 3, RepC3, [256, 0.5]] # 21 F5
+  - [[15, 18, 21], 1, RTDETRDecoder, [nc, 256, 300, 4, 8, 3]] # 22
+

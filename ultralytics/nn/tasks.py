@@ -880,6 +880,27 @@ def parse_model(d, ch, verbose=True, warehouse_manager=None):  # model_dict, inp
             args = [ch[f]]
         elif m in {Concat}:
             c2 = sum(ch[x] for x in f)
+        elif m in {HRNetV2W18, RBHRNetA, RBHRNetB}:
+            # One backbone layer returns [P3, P4, P5]. Keep actual channels
+            # for the three explicit HRNetFeature selectors below.
+            # Tuple avoids the parser's special list-valued timm-backbone path,
+            # which assigns a class instead of constructing a module.
+            c2 = ((36, 72, 144) if m in {HRNetV2W18, RBHRNetA}
+                  else (36, 64, 112))
+        elif m is HRNetFeature:
+            c2 = ch[f][args[0]]
+        elif m is DynamicUpsample:
+            channels = [ch[x] for x in f] if isinstance(f, (tuple, list)) else [ch[f]]
+            if len(channels) == 2 and channels[0] != channels[1]:
+                raise ValueError(f'LAF-0 source and target channels differ: {channels}')
+            c2 = channels[0]
+            args = [c2, *args]
+        elif m is IsolatedLAF:
+            c1 = [ch[x] for x in f]
+            if c1 != [256, 256]:
+                raise ValueError(f'LAF-1 requires [256, 256] channels, got {c1}')
+            c2 = c1[0]
+            args = [c2, *args]
         elif m is BAPS:
             # Multi-input pluggable module: from [p2_idx, p3_idx] -> c_p3.
             # args: (c_p2, c_p3, hidden_channels). Output channels = c_p3.
