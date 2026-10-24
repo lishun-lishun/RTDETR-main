@@ -46,6 +46,8 @@ python -u tools/benchmark_r18_sarep_spasff.py --weights runs/sarep_spasff/sarep/
 
 The exporter compares training structure, in-memory fused structure, and independently reloaded deployment checkpoint. It refuses to publish the output if relative error exceeds 1e-4 **and** absolute error exceeds 1e-3. Benchmark only the verified deployment file when reporting deployed SA-Rep latency. Branch kernel norms are diagnostic statistics, not proof of detection benefit.
 
+The complete-model unit test uses a randomly initialized RT-DETR. Its decoder selects queries with `torch.topk`; nearly equal random scores can change query order after tiny FP32 rounding differences from convolution fusion. The unit test therefore checks SA-Rep output, all three decoder input features, and encoder scores before top-k, then checks the full decoder output when query indices are unchanged. It also checks that the serialized deployment model reproduces the in-memory deployment output. The trained-checkpoint exporter retains a strict full-output check and will reject a checkpoint whose decoded predictions differ materially.
+
 ## Limits and checks still requiring server artifacts
 
 - Verify original baseline `args.yaml`, logs, checkpoint, and dataset split against the new run before claiming a fair comparison.

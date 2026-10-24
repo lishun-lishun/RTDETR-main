@@ -172,20 +172,52 @@ class SARepSPASFFTests(unittest.TestCase):
         config = ROOT / 'ultralytics/cfg/models/rt-detr/rtdetr_r18_sarep.yaml'
         model = RTDETR(str(config)).model.eval()
         x = torch.randn(1, 3, 128, 128)
+        decoder_inputs = []
+        encoder_scores = []
+        rep_outputs = []
+        decoder = model.model[-1]
+        rep = model.model[5].blocks[1].branch2b
+        rep_hook = rep.register_forward_hook(
+            lambda _module, _args, output: rep_outputs.append(output.detach().clone()))
+        input_hook = decoder.register_forward_pre_hook(
+            lambda _module, args: decoder_inputs.append(
+                [feature.detach().clone() for feature in args[0]]))
+        score_hook = decoder.enc_score_head.register_forward_hook(
+            lambda _module, _args, output: encoder_scores.append(output.detach().clone()))
         with torch.inference_mode():
             before = model(x)
             self.assertEqual(switch_sarep_to_deploy(model), 1)
             after = model(x)
-        self.assertLess(((before[0].float() - after[0].float()).norm() /
-                         before[0].float().norm().clamp_min(1e-8)).item(), 1e-4)
+        input_hook.remove()
+        score_hook.remove()
+        rep_hook.remove()
+        # A random decoder has nearly tied query scores: a tiny convolution
+        # rounding difference can reorder top-k queries and make a positional
+        # tensor comparison large. Check the continuous input to top-k first.
+        torch.testing.assert_close(rep_outputs[0], rep_outputs[1], rtol=1e-4, atol=1e-4)
+        for old, new in zip(decoder_inputs[0], decoder_inputs[1]):
+            torch.testing.assert_close(old, new, rtol=1e-4, atol=1e-4)
+        torch.testing.assert_close(encoder_scores[0], encoder_scores[1],
+                                   rtol=1e-4, atol=1e-4)
+        topk_before = torch.topk(encoder_scores[0].max(-1).values,
+                                  decoder.num_queries, dim=1).indices
+        topk_after = torch.topk(encoder_scores[1].max(-1).values,
+                                 decoder.num_queries, dim=1).indices
+        if torch.equal(topk_before, topk_after):
+            self.assertLess(((before[0].float() - after[0].float()).norm() /
+                             before[0].float().norm().clamp_min(1e-8)).item(), 1e-4)
+        else:
+            print(f'random decoder top-k rank changes: '
+                  f'{(topk_before != topk_after).sum().item()} '
+                  f'(encoder score max delta '
+                  f'{(encoder_scores[0] - encoder_scores[1]).abs().max().item():.3g})')
         with tempfile.TemporaryDirectory() as directory:
             path = Path(directory) / 'deploy.pt'
             torch.save({'model': model, 'train_args': {'task': 'detect'}}, path)
             restored = RTDETR(str(path)).model.eval()
             with torch.inference_mode():
                 loaded = restored(x)
-            self.assertLess(((before[0].float() - loaded[0].float()).norm() /
-                             before[0].float().norm().clamp_min(1e-8)).item(), 1e-4)
+            torch.testing.assert_close(after[0], loaded[0], rtol=1e-5, atol=1e-5)
 
     @unittest.skipUnless(torch.cuda.is_available(), 'CUDA unavailable')
     def test_cuda_amp(self):
