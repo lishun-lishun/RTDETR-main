@@ -28,6 +28,7 @@ from .scre_splf import *
 from .hrnet import HRNetV2W18, HRNetFeature
 from .rb_hrnet import RBHRNetA, RBHRNetB
 from .laf import DynamicUpsample, IsolatedLAF
+from .sarep_spasff import SARepConv, SARepBlocks, SPASFF, switch_sarep_to_deploy
 
 # __all__ = ('Conv', 'Conv2', 'LightConv', 'RepConv', 'DWConv', 'DWConvTranspose2d', 'ConvTranspose', 'Focus',
 #            'GhostConv', 'ChannelAttention', 'SpatialAttention', 'CBAM', 'Concat', 'TransformerLayer',

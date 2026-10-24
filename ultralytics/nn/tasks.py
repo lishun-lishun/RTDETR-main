@@ -880,6 +880,15 @@ def parse_model(d, ch, verbose=True, warehouse_manager=None):  # model_dict, inp
             args = [ch[f]]
         elif m in {Concat}:
             c2 = sum(ch[x] for x in f)
+        elif m is SARepBlocks:
+            c2 = args[0]
+            args = [ch[f], *args]
+        elif m is SPASFF:
+            channels = [ch[x] for x in f]
+            if len(channels) != 3:
+                raise ValueError(f'SPASFF expects final F3/F4/F5, got {channels}')
+            c2 = channels[0]
+            args = [*channels, *args]
         elif m in {HRNetV2W18, RBHRNetA, RBHRNetB}:
             # One backbone layer returns [P3, P4, P5]. Keep actual channels
             # for the three explicit HRNetFeature selectors below.
