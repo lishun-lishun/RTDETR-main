@@ -29,6 +29,8 @@ from .hrnet import HRNetV2W18, HRNetFeature
 from .rb_hrnet import RBHRNetA, RBHRNetB
 from .laf import DynamicUpsample, IsolatedLAF
 from .sarep_spasff import SARepConv, SARepBlocks, SPASFF, switch_sarep_to_deploy
+from .res2basic import Res2Conv, Res2BasicBlock, Res2Blocks
+from .lite_gd import GDGather, GDInject, LiteGDNeck, GDFeature
 
 # __all__ = ('Conv', 'Conv2', 'LightConv', 'RepConv', 'DWConv', 'DWConvTranspose2d', 'ConvTranspose', 'Focus',
 #            'GhostConv', 'ChannelAttention', 'SpatialAttention', 'CBAM', 'Concat', 'TransformerLayer',

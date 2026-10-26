@@ -889,6 +889,17 @@ def parse_model(d, ch, verbose=True, warehouse_manager=None):  # model_dict, inp
                 raise ValueError(f'SPASFF expects final F3/F4/F5, got {channels}')
             c2 = channels[0]
             args = [*channels, *args]
+        elif m is Res2Blocks:
+            c2 = args[0]
+            args = [ch[f], *args]
+        elif m is LiteGDNeck:
+            channels = [ch[x] for x in f]
+            if len(channels) != 3:
+                raise ValueError(f'LiteGDNeck expects P3/P4/AIFI-P5, got {channels}')
+            c2 = (args[1],) * 3  # tuple: do not enter the parser's list-backbone path
+            args = [*channels, *args]
+        elif m is GDFeature:
+            c2 = ch[f][args[0]]
         elif m in {HRNetV2W18, RBHRNetA, RBHRNetB}:
             # One backbone layer returns [P3, P4, P5]. Keep actual channels
             # for the three explicit HRNetFeature selectors below.

@@ -146,6 +146,7 @@ tests/
 !/tests/test_scre_splf.py
 !/tests/test_rb_hrnet_laf.py
 !/tests/test_sarep_spasff.py
+!/tests/test_res2basic_litegd.py
 .DS_Store
 
 # Neural Network weights -----------------------------------------------------------------------------------------------
