@@ -154,6 +154,9 @@ class Res2GDTests(unittest.TestCase):
                                             (batch, 256, size // 16, size // 16),
                                             (batch, 256, size // 32, size // 32)])
             model.train()
+            # DetectionTrainer.set_model_attributes() normally attaches nc.
+            # This test constructs RTDETRDetectionModel directly.
+            model.nc = model.yaml['nc']
             optimizer = torch.optim.SGD(model.parameters(), lr=1e-4)
             optimizer.zero_grad()
             # Training-mode RT-DETR requires targets for decoder denoising.
