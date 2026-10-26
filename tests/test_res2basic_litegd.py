@@ -156,14 +156,18 @@ class Res2GDTests(unittest.TestCase):
             model.train()
             optimizer = torch.optim.SGD(model.parameters(), lr=1e-4)
             optimizer.zero_grad()
-            output = model(torch.randn(2, 3, 128, 128))
-            def tensors(value):
-                if torch.is_tensor(value):
-                    return [value]
-                if isinstance(value, (list, tuple)):
-                    return [tensor for part in value for tensor in tensors(part)]
-                return []
-            sum(t.float().square().mean() for t in tensors(output)).backward()
+            # Training-mode RT-DETR requires targets for decoder denoising.
+            # Use the actual model loss path rather than calling it with an
+            # image tensor and an implicit batch=None.
+            train_batch = {
+                'img': torch.rand(2, 3, 128, 128),
+                'batch_idx': torch.tensor([0, 1], dtype=torch.long),
+                'cls': torch.zeros(2, 1, dtype=torch.long),
+                'bboxes': torch.tensor([[0.50, 0.50, 0.15, 0.15],
+                                        [0.35, 0.40, 0.10, 0.12]])}
+            loss, _ = model(train_batch)
+            self.assertTrue(torch.isfinite(loss).item())
+            loss.backward()
             from ultralytics.nn.modules import Res2Conv, LiteGDNeck
             added = [m for m in model.modules() if isinstance(m, (Res2Conv, LiteGDNeck))]
             self.assertTrue(added)
