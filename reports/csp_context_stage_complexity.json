@@ -1,0 +1,66 @@
+{
+  "protocol": "PyTorch profiler supported ops; isolated stages, batch=1, FP32",
+  "input_size": 640,
+  "stages": {
+    "3": {
+      "original": {
+        "parameters": 525568,
+        "trainable_parameters": 525568,
+        "supported_flops_lower_bound": 6712524800,
+        "supported_gflops_lower_bound": 6.7125248,
+        "supported_macs_lower_bound": 3356262400.0,
+        "output_shape": [
+          1,
+          128,
+          80,
+          80
+        ]
+      },
+      "csp": {
+        "parameters": 595969,
+        "trainable_parameters": 595969,
+        "supported_flops_lower_bound": 7605043202,
+        "supported_gflops_lower_bound": 7.605043202,
+        "supported_macs_lower_bound": 3802521601.0,
+        "output_shape": [
+          1,
+          128,
+          80,
+          80
+        ]
+      },
+      "parameter_delta": 70401,
+      "supported_flops_delta": 892518402
+    },
+    "4": {
+      "original": {
+        "parameters": 2099712,
+        "trainable_parameters": 2099712,
+        "supported_flops_lower_bound": 6711705600,
+        "supported_gflops_lower_bound": 6.7117056,
+        "supported_macs_lower_bound": 3355852800.0,
+        "output_shape": [
+          1,
+          256,
+          40,
+          40
+        ]
+      },
+      "csp": {
+        "parameters": 1366785,
+        "trainable_parameters": 1366785,
+        "supported_flops_lower_bound": 4360806402,
+        "supported_gflops_lower_bound": 4.360806402,
+        "supported_macs_lower_bound": 2180403201.0,
+        "output_shape": [
+          1,
+          256,
+          40,
+          40
+        ]
+      },
+      "parameter_delta": -732927,
+      "supported_flops_delta": -2350899198
+    }
+  }
+}

@@ -892,6 +892,9 @@ def parse_model(d, ch, verbose=True, warehouse_manager=None):  # model_dict, inp
         elif m is Res2Blocks:
             c2 = args[0]
             args = [ch[f], *args]
+        elif m in {CSPResidualStage, CSPContextStage}:
+            c2 = args[0]
+            args = [ch[f], *args]
         elif m is LiteGDNeck:
             channels = [ch[x] for x in f]
             if len(channels) != 3:
