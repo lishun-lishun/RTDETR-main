@@ -30,6 +30,7 @@ def main():
         parser.error('resume must be this model/seed weights/last.pt')
     settings, effective_batch = settings_for_run(args, parser)
     print(json.dumps({'config': str(config), 'output': str(output),
+                      'micro_batch': settings['batch'],
                       'effective_batch': effective_batch, 'settings': settings},
                      indent=2), flush=True)
     if args.dry_run:
@@ -92,7 +93,8 @@ def main():
             'model': args.model, 'yaml': str(config.resolve()),
             'dataset': str(DATA.resolve()),
             'baseline_args': str(args.baseline_args) if args.baseline_args else None,
-            'effective_batch': effective_batch, 'settings': settings,
+            'micro_batch': settings['batch'], 'effective_batch': effective_batch,
+            'settings': settings,
             'started_at': dt.datetime.now().astimezone().isoformat()},
             indent=2), encoding='utf-8')
         (output / 'model_summary.json').write_text(json.dumps(summary, indent=2),

@@ -8,9 +8,9 @@ import yaml
 
 ROOT = Path(__file__).resolve().parents[1]
 MODEL_DIR = ROOT / 'ultralytics/cfg/models/rt-detr'
-PROFILE = ROOT / 'ultralytics/cfg/anti_detr_default.yaml'
+PROFILE = ROOT / 'ultralytics/cfg/csp_context_default.yaml'
 DATA = ROOT / 'dataset/DUT-Anti-UAV.yaml'
-RUNS = ROOT / 'runs/csp_context_r18'
+RUNS = ROOT / 'runs/csp_context_r18_batch8'
 CONFIGS = {
     'stage3': 'rtdetr_r18_csp_stage3.yaml',
     'stage4': 'rtdetr_r18_csp_stage4.yaml',
@@ -51,13 +51,16 @@ def settings_for_run(args, parser):
         settings = {key: value for key, value in baseline.items() if key in allowed}
     else:
         print('WARNING: historical R18 args.yaml unavailable; exact protocol parity is '
-              'unverified. Using checked-in anti_detr_default.yaml.', flush=True)
+              'unverified. Using checked-in csp_context_default.yaml.', flush=True)
         settings = {key: value for key, value in profile.items()
                     if key not in ('test_batch', 'micro_batch')}
         batch = profile['batch']
+    if batch % profile['micro_batch']:
+        parser.error('effective batch must be divisible by CSP micro_batch')
     settings['batch'] = profile['micro_batch']
     settings['gradient_accumulation'] = batch // profile['micro_batch']
-    settings['warmup_epochs'] = profile['warmup_epochs'] * settings['gradient_accumulation']
+    settings['warmup_epochs'] = (profile['warmup_epochs'] *
+                                 settings['gradient_accumulation'])
     for key in ('model', 'mode', 'project', 'name', 'device', 'resume',
                 'save_dir', 'cfg', 'data'):
         settings.pop(key, None)

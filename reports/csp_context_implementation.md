@@ -35,6 +35,6 @@ Decoder 源索引保持 `[19,22,25]`、300 queries。P3/P4/P5 期望分别为 `[
 
 ## 训练协议与尚未验证的内容
 
-`anti_detr_default.yaml` 为 150 epoch、640、AdamW、初始 LR 1e-4、`lrf=1`、AMP 关闭、有效 batch8。脚本用微批量2、累积4。当前 Trainer 将 `warmup_epochs` 用作**微批量迭代数**，因此配置 2000 次优化器迭代映射成 8000 次微批量迭代。真实每轮 LR、loss 和验证指标写入 `results.csv`，结束时复制到 `epoch_history.json`。
+独立的 `csp_context_default.yaml` 为 150 epoch、640、AdamW、初始 LR 1e-4、`lrf=1`、AMP 关闭、batch/micro-batch 均为8、梯度累积1、有效batch8。原始共享配置仍保留微批量2供其他实验使用。当前 Trainer 将 `warmup_epochs` 用作**微批量迭代数**，因此 CSP 运行的 2000 次微批量迭代就是 2000 次优化器迭代。真实每轮 LR、loss 和验证指标写入 `results.csv`，结束时复制到 `epoch_history.json`。
 
 本地未找到原始 Baseline 的 `args.yaml`、`results.csv` 或 checkpoint，无法核对其全部增强和调度，也无法确认历史 20,083,028 参数统计采用的类别数。训练脚本接受 `--baseline-args` 核对核心设置并沿用其余设置。若历史协议不同，需要同协议 Baseline，不应把旧的 0.707/0.816 作为严格公平对照。没有运行完整训练、整网 benchmark、CUDA/AMP 或检测 AP；精度收益未知。

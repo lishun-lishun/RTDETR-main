@@ -1,0 +1,32 @@
+# CSP Stage R18 single-GPU protocol. Keep this separate from other ablations.
+epochs: 150
+patience: 0
+batch: 8
+micro_batch: 8
+test_batch: 16
+imgsz: 640
+cache: false
+workers: 4
+
+pretrained: false
+optimizer: AdamW
+seed: 0
+deterministic: true
+cos_lr: false
+close_mosaic: 0
+amp: false
+
+lr0: 0.0001
+lrf: 1.0
+momentum: 0.9
+weight_decay: 0.0001
+# This RTDETR-main Trainer interprets warmup_epochs as micro-batch iterations.
+# With gradient_accumulation=1, 2000 micro-batches are 2000 optimizer steps.
+warmup_epochs: 2000
+warmup_momentum: 0.8
+warmup_bias_lr: 0.0
+
+max_det: 300
+mosaic: 0.0
+mixup: 0.0
+copy_paste: 0.0

@@ -2,6 +2,8 @@
 
 在 Linux 项目根目录运行，物理 GPU 1 对应 `CUDA_VISIBLE_DEVICES=1 ... --device 0`。先把本地修改同步到服务器，运行：
 
+下列 CSP 命令默认每次前向 batch/micro-batch 均为 8，梯度累积为 1，有效 batch 为 8。
+
 ```bash
 CUDA_VISIBLE_DEVICES=1 python -m unittest discover -s tests -p test_csp_context_r18.py -v
 ```
@@ -25,19 +27,19 @@ CUDA_VISIBLE_DEVICES=1 python -u tools/train_r18_csp_context.py --model stage4_k
 CUDA_VISIBLE_DEVICES=1 python -u tools/train_r18_csp_context.py --model stage3_ratio05 --device 0 --seed 0
 ```
 
-若有原始 Baseline `args.yaml`，建议在各命令末尾追加 `--baseline-args /path/to/args.yaml`。脚本保存到 `runs/csp_context_r18/<model>/seed0/`，已有目录会阻止新训练。恢复同一运行示例：
+若有原始 Baseline `args.yaml`，建议在各命令末尾追加 `--baseline-args /path/to/args.yaml`。脚本保存到 `runs/csp_context_r18_batch8/<model>/seed0/`，已有目录会阻止新训练。恢复同一运行示例：
 
 ```bash
-CUDA_VISIBLE_DEVICES=1 python -u tools/train_r18_csp_context.py --model stage3 --device 0 --seed 0 --resume runs/csp_context_r18/stage3/seed0/weights/last.pt
+CUDA_VISIBLE_DEVICES=1 python -u tools/train_r18_csp_context.py --model stage3 --device 0 --seed 0 --resume runs/csp_context_r18_batch8/stage3/seed0/weights/last.pt
 ```
 
-训练目录含 `training_config.json`、`model_summary.json`、`args.yaml`、`results.csv`、`epoch_history.json`、权重和 `execution_log.txt`。使用新的输出目录分别验证和最终测试；标注 JSON 必须对应 split：
+训练目录含 `training_config.json`、`model_summary.json`、`args.yaml`、`results.csv`、`epoch_history.json`、权重和 `execution_log.txt`。默认根目录为 `runs/csp_context_r18_batch8/`，与此前微批量2的运行隔离。使用新的输出目录分别验证和最终测试；标注 JSON 必须对应 split：
 
 ```bash
-CUDA_VISIBLE_DEVICES=1 python tools/evaluate_r18_csp_context.py --model stage3 --weights runs/csp_context_r18/stage3/seed0/weights/best.pt --annotations /path/to/val.json --split val --device 0 --output-dir runs/csp_context_r18/stage3/seed0/eval_val
-CUDA_VISIBLE_DEVICES=1 python tools/evaluate_r18_csp_context.py --model stage3 --weights runs/csp_context_r18/stage3/seed0/weights/best.pt --annotations /path/to/test.json --split test --device 0 --output-dir runs/csp_context_r18/stage3/seed0/eval_test
-CUDA_VISIBLE_DEVICES=1 python tools/benchmark_r18_csp_context.py --weights runs/csp_context_r18/stage3/seed0/weights/best.pt --device cuda:0 --output runs/csp_context_r18/stage3/seed0/benchmark_results.json
-CUDA_VISIBLE_DEVICES=1 python tools/diagnose_r18_csp_context.py --weights runs/csp_context_r18/stage3/seed0/weights/best.pt --image /path/to/example.jpg --annotations /path/to/val.json --device cuda:0 --output runs/csp_context_r18/stage3/seed0/csp_diagnostics.json
+CUDA_VISIBLE_DEVICES=1 python tools/evaluate_r18_csp_context.py --model stage3 --weights runs/csp_context_r18_batch8/stage3/seed0/weights/best.pt --annotations /path/to/val.json --split val --device 0 --output-dir runs/csp_context_r18_batch8/stage3/seed0/eval_val
+CUDA_VISIBLE_DEVICES=1 python tools/evaluate_r18_csp_context.py --model stage3 --weights runs/csp_context_r18_batch8/stage3/seed0/weights/best.pt --annotations /path/to/test.json --split test --device 0 --output-dir runs/csp_context_r18_batch8/stage3/seed0/eval_test
+CUDA_VISIBLE_DEVICES=1 python tools/benchmark_r18_csp_context.py --weights runs/csp_context_r18_batch8/stage3/seed0/weights/best.pt --device cuda:0 --output runs/csp_context_r18_batch8/stage3/seed0/benchmark_results.json
+CUDA_VISIBLE_DEVICES=1 python tools/diagnose_r18_csp_context.py --weights runs/csp_context_r18_batch8/stage3/seed0/weights/best.pt --image /path/to/example.jpg --annotations /path/to/val.json --device cuda:0 --output runs/csp_context_r18_batch8/stage3/seed0/csp_diagnostics.json
 ```
 
 `evaluate` 写整体 AP50/AP75/AP50:95、P/R、自定义尺寸组 AP/Recall/匹配 IoU 和候选框定位表。Tiny/Small/Medium/Large 用 640 letterbox 后最大边 ≤8、(8,16]、(16,32]、>32 像素，**不是** COCO 官方 APs/APm/APl。正式 AP 以 COCOeval 为准，候选框定位统计仅作诊断。结构筛选用验证集，测试集用于最终评估。
