@@ -1158,6 +1158,16 @@ def parse_model(d, ch, verbose=True, warehouse_manager=None):  # model_dict, inp
         elif m is SNI:
             c2, up_f = ch[f], args[0]
             args = [up_f]
+        elif m in {LateDownStage, WidthMatchedEarlyDownStage}:
+            # LDW stages take [c2, hidden_channels, num_blocks, stage_num, dilation?].
+            # ``c1`` comes from the graph so YAML cannot accidentally duplicate it.
+            if len(args) < 2:
+                raise ValueError(f'{m.__name__} expects at least [c2, hidden_channels]')
+            c1 = ch[f]
+            requested_c2, requested_hidden = args[:2]
+            c2 = make_divisible(min(requested_c2, max_channels) * width, 8)
+            hidden = make_divisible(min(requested_hidden, max_channels) * width, 8)
+            args = [c1, c2, hidden, *args[2:]]
         elif m is Blocks:
             block_type = globals()[args[1]]
             c1, c2 = ch[f], args[0] * block_type.expansion
