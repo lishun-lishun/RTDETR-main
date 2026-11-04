@@ -12,7 +12,9 @@ def main():
     parser.add_argument("--model", choices=CONFIGS, default="full")
     parser.add_argument("--weights", type=Path, required=True)
     parser.add_argument("--data", type=Path, default=DATA)
-    parser.add_argument("--split", choices=("val", "test"), default="val")
+    # Final checkpoint evaluation defaults to the held-out test split. Use
+    # --split val explicitly while selecting or comparing experiments.
+    parser.add_argument("--split", choices=("val", "test"), default="test")
     parser.add_argument("--device", default="0")
     parser.add_argument("--output-dir", type=Path, required=True)
     parser.add_argument("--dry-run", action="store_true")

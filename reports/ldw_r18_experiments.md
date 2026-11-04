@@ -30,7 +30,7 @@ existing run and supports `--resume` only from that run's `weights/last.pt`.
 ## Evaluation and profiling
 
 ```bash
-python tools/evaluate_r18_ldw.py --model full --weights runs/ldw_r18/full/seed0/weights/best.pt --device 0 --output-dir runs/ldw_r18/full/eval
+python tools/evaluate_r18_ldw.py --model full --weights runs/ldw_r18/full/seed0/weights/best.pt --split test --device 0 --output-dir runs/ldw_r18/full/eval_test
 python tools/benchmark_r18_ldw.py --weights runs/ldw_r18/full/seed0/weights/best.pt --device cuda:0 --precision fp32 --output runs/ldw_r18/full/benchmark_results.json
 python tools/benchmark_r18_ldw.py --weights runs/ldw_r18/full/seed0/weights/best.pt --device cuda:0 --precision fp16 --output runs/ldw_r18/full/benchmark_fp16.json
 python tools/diagnose_r18_ldw.py --weights runs/ldw_r18/full/seed0/weights/best.pt --device cuda:0 --output runs/ldw_r18/full/stage_statistics.json
@@ -39,5 +39,7 @@ python tools/diagnose_r18_ldw.py --weights runs/ldw_r18/full/seed0/weights/best.
 The benchmark reports parameters, trainable parameters, MACs/GFLOPs when
 `thop` is available, mean/median/P95 latency, FPS, and peak GPU memory. It
 measures raw model forward time only and excludes preprocessing, transfer and
-NMS. Accuracy and tiny/small/medium/large AP must be generated from the real
+NMS. The evaluation tool defaults to the held-out `test` split for the final
+checkpoint. Pass `--split val` explicitly for model selection and ablations.
+Accuracy and tiny/small/medium/large AP must be generated from the real
 validation/test annotations; no fabricated result is included here.
