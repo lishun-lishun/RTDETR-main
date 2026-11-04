@@ -278,5 +278,8 @@ class MIRDetBackbone(nn.Module):
                 s8, s16, s32 = exchange(s8, s16, s32)
         else:
             s32 = self.s32_blocks(s32)
-        self.last_states = (s8, s16, s32)
+        # Diagnostics must never retain an autograd graph.  Ultralytics creates
+        # an EMA copy with ``deepcopy(model)`` before training; graph tensors in
+        # ordinary module attributes are not deepcopy-able in PyTorch 2.3.
+        self.last_states = tuple(state.detach() for state in (s8, s16, s32))
         return [self.p3(s8), self.p4(s16), self.p5(s32)]

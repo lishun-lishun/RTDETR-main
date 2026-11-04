@@ -1,6 +1,6 @@
 """Structural and gradient tests for MIRNet-Det."""
 
-import tempfile
+import copy
 import unittest
 from pathlib import Path
 
@@ -76,6 +76,13 @@ class TestMIRNetDet(unittest.TestCase):
         self.assertEqual([tuple(x.shape) for x in outputs],
                          [(2, 128, 80, 80), (2, 256, 40, 40), (2, 512, 20, 20)])
         self.assertIsNotNone(model.last_states)
+
+    def test_backbone_can_be_deepcopied_after_forward(self):
+        model = MIRDetBackbone()
+        model(torch.randn(1, 3, 128, 128))
+        clone = copy.deepcopy(model)
+        self.assertIsInstance(clone, MIRDetBackbone)
+        self.assertTrue(all(not state.requires_grad for state in model.last_states))
 
     def test_backbone_accepts_legal_nonstandard_size(self):
         outputs = MIRDetBackbone()(torch.randn(1, 3, 384, 512))
