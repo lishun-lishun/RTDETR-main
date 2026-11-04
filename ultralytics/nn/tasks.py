@@ -1158,6 +1158,17 @@ def parse_model(d, ch, verbose=True, warehouse_manager=None):  # model_dict, inp
         elif m is SNI:
             c2, up_f = ch[f], args[0]
             args = [up_f]
+        elif m is MIRDetBackbone:
+            # MIRDetBackbone returns [P3, P4, P5]. Keep a tuple in the parser
+            # so the normal multi-output route can be selected explicitly by
+            # FeatureSelect layers below it.
+            c2 = (args[1] if len(args) > 1 else 128, 256, 512)
+            args = [*args, ch[f]]
+        elif m is FeatureSelect:
+            if not isinstance(ch[f], (tuple, list)) or len(ch[f]) != 3:
+                raise ValueError(f'FeatureSelect expects a 3-scale source, got {ch[f]}')
+            index = int(args[0])
+            c2 = ch[f][index]
         elif m in {LateDownStage, WidthMatchedEarlyDownStage}:
             # LDW stages take [c2, hidden_channels, num_blocks, stage_num, dilation?].
             # ``c1`` comes from the graph so YAML cannot accidentally duplicate it.

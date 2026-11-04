@@ -33,6 +33,9 @@ from .res2basic import Res2Conv, Res2BasicBlock, Res2Blocks
 from .lite_gd import GDGather, GDInject, LiteGDNeck, GDFeature
 from .csp_context import ContextBlock, CSPResidualStage, CSPContextStage
 from .ldw import DownsampleProjection, ResidualBlock, LateDownStage, WidthMatchedEarlyDownStage
+from .mirnet_det import (MIRStem, SpatialRearrangeDownsample, StrideDownsample,
+                          EfficientInvertedBlock, DualResolutionExchange,
+                          TriResolutionExchange, MIRDetBackbone, FeatureSelect)
 
 # __all__ = ('Conv', 'Conv2', 'LightConv', 'RepConv', 'DWConv', 'DWConvTranspose2d', 'ConvTranspose', 'Focus',
 #            'GhostConv', 'ChannelAttention', 'SpatialAttention', 'CBAM', 'Concat', 'TransformerLayer',
