@@ -67,11 +67,17 @@ def protocol_settings(args, parser):
 
 def preflight(model, input_size=128):
     import torch
+    from ultralytics.nn.modules import FeatureSelect
 
     found = {}
-    handles = [model.model[index].register_forward_hook(
-        lambda _m, _i, output, index=index: found.__setitem__(index, tuple(output.shape)))
-               for index in (1, 2, 3)]
+    selectors = [module for module in model.model if isinstance(module, FeatureSelect)]
+    if len(selectors) != 3:
+        raise RuntimeError(f"expected three FeatureSelect layers, found {len(selectors)}")
+    if [selector.index for selector in selectors] != [0, 1, 2]:
+        raise RuntimeError(f"FeatureSelect order is {[selector.index for selector in selectors]}, expected [0, 1, 2]")
+    handles = [selector.register_forward_hook(
+        lambda _m, _i, output, key=key: found.__setitem__(key, tuple(output.shape)))
+               for key, selector in zip(("p3", "p4", "p5"), selectors)]
     decoder_shapes = {}
     handles.append(model.model[-1].register_forward_pre_hook(
         lambda _m, values: decoder_shapes.__setitem__(

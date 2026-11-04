@@ -48,7 +48,7 @@ def main():
             subprocess.run([sys.executable, "-m", "unittest", "discover", "-s", "tests", "-p", "test_mirnet_det.py", "-v"], cwd=ROOT, check=True)
         network = RTDETRDetectionModel(str(config), nc=1, verbose=False).eval()
         shapes = preflight(network)
-        expected = {1: (1, 128, 16, 16), 2: (1, 256, 8, 8), 3: (1, 512, 4, 4),
+        expected = {"p3": (1, 128, 16, 16), "p4": (1, 256, 8, 8), "p5": (1, 512, 4, 4),
                     "decoder": [(1, 256, 16, 16), (1, 256, 8, 8), (1, 256, 4, 4)],
                     "decoder_from": [15, 18, 21]}
         if shapes != expected:

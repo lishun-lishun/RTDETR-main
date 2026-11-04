@@ -86,10 +86,13 @@ class TestMIRNetDet(unittest.TestCase):
 
         model = RTDETRDetectionModel(str(MODEL_DIR / "rtdetr_mirnet_full.yaml"), nc=1, verbose=False).eval()
         seen = {}
-        hooks = [model.model[index].register_forward_hook(
+        selectors = [module for module in model.model if isinstance(module, FeatureSelect)]
+        self.assertEqual(len(selectors), 3)
+        hooks = [selector.register_forward_hook(
             lambda _m, inputs, output, index=index: seen.__setitem__(index, {
-                "input": tuple(inputs[0].shape), "output": tuple(output.shape)}))
-                 for index in (1, 2, 3)]
+                "input": [tuple(value.shape) for value in inputs[0]] if isinstance(inputs[0], (tuple, list)) else tuple(inputs[0].shape),
+                "output": tuple(output.shape)}))
+                 for index, selector in enumerate(selectors)]
         decoder_inputs = {}
         hooks.append(model.model[-1].register_forward_pre_hook(
             lambda _m, values: decoder_inputs.__setitem__(
@@ -100,7 +103,8 @@ class TestMIRNetDet(unittest.TestCase):
         finally:
             for hook in hooks:
                 hook.remove()
-        self.assertEqual([seen[i]["input"] for i in (1, 2, 3)],
+        self.assertEqual(seen[0]["input"], [(1, 128, 16, 16), (1, 256, 8, 8), (1, 512, 4, 4)])
+        self.assertEqual([seen[i]["output"] for i in (0, 1, 2)],
                          [(1, 128, 16, 16), (1, 256, 8, 8), (1, 512, 4, 4)])
         self.assertEqual(decoder_inputs["shapes"], [(1, 256, 16, 16), (1, 256, 8, 8), (1, 256, 4, 4)])
         self.assertEqual(model.model[-1].f, [15, 18, 21])
