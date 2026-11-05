@@ -42,6 +42,7 @@ def tensor_values(value):
 class TestEightBackbones(unittest.TestCase):
     def test_registry_and_yaml_inventory(self):
         self.assertEqual(set(BACKBONE_SPECS), set(CONFIGS))
+        self.assertFalse(hasattr(BackboneAdapter, "backbone"))
         for filename in CONFIGS.values():
             self.assertTrue((MODEL_DIR / filename).is_file(), filename)
 

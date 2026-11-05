@@ -546,6 +546,11 @@ class RTDETRDetectionModel(DetectionModel):
                 self._profile_one_layer(m, x, dt)
             if hasattr(m, 'backbone'):
                 x = m(x)
+                # Some multi-output backbones return tuples.  The legacy
+                # backbone route pads outputs with ``insert`` and therefore
+                # needs a mutable list first.
+                if isinstance(x, tuple):
+                    x = list(x)
                 for _ in range(5 - len(x)):
                     x.insert(0, None)
                 for i_idx, i in enumerate(x):

@@ -94,21 +94,25 @@ class BackboneAdapter(nn.Module):
             self.resolved_model_name = resolved
             self.registry_models = registry
             self.timm_version = getattr(timm, "__version__", "unknown")
-            self.backbone = timm.create_model(resolved, pretrained=pretrained, features_only=True)
-            reductions = tuple(int(value) for value in self.backbone.feature_info.reduction())
-            channels = tuple(int(value) for value in self.backbone.feature_info.channels())
+            # Keep this member named ``encoder``.  Ultralytics reserves the
+            # attribute name ``backbone`` for its legacy list-valued parser
+            # path; using it here would misclassify this adapter and call
+            # ``tuple.insert`` on our feature output.
+            self.encoder = timm.create_model(resolved, pretrained=pretrained, features_only=True)
+            reductions = tuple(int(value) for value in self.encoder.feature_info.reduction())
+            channels = tuple(int(value) for value in self.encoder.feature_info.channels())
             self._source_outputs = self._select_indices(reductions, model_name)
             source_channels = tuple(channels[index] for index in self._source_outputs)
         elif model_name == "lsknet_t":
             from .lsknet_backbone import create_lsknet_t
-            self.backbone = create_lsknet_t()
+            self.encoder = create_lsknet_t()
             # Official LSKNet-T emits reductions 4/8/16/32 and channels
             # 32/64/160/256.
             self._source_outputs = (1, 2, 3)
             source_channels = (64, 160, 256)
         else:
             from .pkinetv2_backbone import create_pkinetv2_t
-            self.backbone = create_pkinetv2_t()
+            self.encoder = create_pkinetv2_t()
             # PKINet-v2-T emits stages at reductions 4/8/16/32 with channels
             # 32/64/160/256; select the last three stages.
             self._source_outputs = (1, 2, 3)
@@ -146,7 +150,7 @@ class BackboneAdapter(nn.Module):
         return tuple(outputs)
 
     def forward(self, x: torch.Tensor) -> tuple[torch.Tensor, torch.Tensor, torch.Tensor]:
-        outputs = self._as_feature_list(self.backbone(x))
+        outputs = self._as_feature_list(self.encoder(x))
         if max(self._source_outputs) >= len(outputs):
             raise RuntimeError(
                 f"{self.model_name} returned {len(outputs)} features, "
