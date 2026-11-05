@@ -1164,6 +1164,14 @@ def parse_model(d, ch, verbose=True, warehouse_manager=None):  # model_dict, inp
             # FeatureSelect layers below it.
             c2 = (args[1] if len(args) > 1 else 128, 256, 512)
             args = [*args, ch[f]]
+        elif m is DLA34Backbone:
+            # Official DLA-34 keeps its stride-1 7x7 stem and returns the
+            # genuine level3/4/5 tensors.  Pass the graph input channel count
+            # into the module while retaining a tuple for explicit selectors.
+            if ch[f] != 3:
+                raise ValueError(f'DLA34Backbone expects a 3-channel image input, got {ch[f]}')
+            c2 = (128, 256, 512)
+            args = [*args, ch[f]]
         elif m is FeatureSelect:
             if not isinstance(ch[f], (tuple, list)) or len(ch[f]) != 3:
                 raise ValueError(f'FeatureSelect expects a 3-scale source, got {ch[f]}')

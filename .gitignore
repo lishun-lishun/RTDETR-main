@@ -150,6 +150,7 @@ tests/
 !/tests/test_csp_context_r18.py
 !/tests/test_ldw_r18.py
 !/tests/test_mirnet_det.py
+!/tests/test_dla34_rtdetr.py
 .DS_Store
 
 # Neural Network weights -----------------------------------------------------------------------------------------------

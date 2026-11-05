@@ -36,6 +36,7 @@ from .ldw import DownsampleProjection, ResidualBlock, LateDownStage, WidthMatche
 from .mirnet_det import (MIRStem, SpatialRearrangeDownsample, StrideDownsample,
                           EfficientInvertedBlock, DualResolutionExchange,
                           TriResolutionExchange, MIRDetBackbone, FeatureSelect)
+from .dla34_backbone import DLABasicBlock, DLARoot, DLATree, DLA34Backbone
 
 # __all__ = ('Conv', 'Conv2', 'LightConv', 'RepConv', 'DWConv', 'DWConvTranspose2d', 'ConvTranspose', 'Focus',
 #            'GhostConv', 'ChannelAttention', 'SpatialAttention', 'CBAM', 'Concat', 'TransformerLayer',
