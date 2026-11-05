@@ -231,8 +231,13 @@ class PKINetV2(nn.Module):
             x, height, width = getattr(self, f"patch_embed{index + 1}")(x)
             for block in getattr(self, f"block{index + 1}"):
                 x = block(x)
+            # LayerNorm is applied on flattened tokens, but the next stage's
+            # patch embedding is a Conv2d and therefore must receive NCHW.
+            # Keep the stage output in NCHW after normalisation instead of
+            # leaking the intermediate [B, HW, C] token layout downstream.
             x = getattr(self, f"norm{index + 1}")(x.flatten(2).transpose(1, 2))
-            outputs.append(x.reshape(batch, height, width, -1).permute(0, 3, 1, 2).contiguous())
+            x = x.reshape(batch, height, width, -1).permute(0, 3, 1, 2).contiguous()
+            outputs.append(x)
         return outputs
 
     def switch_to_deploy(self):

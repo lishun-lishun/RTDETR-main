@@ -68,6 +68,18 @@ def resolve_timm_model_name(name: str) -> tuple[str, tuple[str, ...]]:
     )
 
 
+def _disable_inplace_activations(module: nn.Module) -> None:
+    """Disable in-place activations for autograd-safe timm feature extraction.
+
+    EfficientViT splits tensors into views and then applies an activation with
+    ``inplace=True``. PyTorch rejects that operation during backward, so keep
+    the backbone trainable while making activation updates out-of-place.
+    """
+    for child in module.modules():
+        if hasattr(child, "inplace"):
+            child.inplace = False
+
+
 class BackboneAdapter(nn.Module):
     """Return P3/P4/P5 with fixed channels and checked spatial reductions."""
 
@@ -99,6 +111,7 @@ class BackboneAdapter(nn.Module):
             # path; using it here would misclassify this adapter and call
             # ``tuple.insert`` on our feature output.
             self.encoder = timm.create_model(resolved, pretrained=pretrained, features_only=True)
+            _disable_inplace_activations(self.encoder)
             reductions = tuple(int(value) for value in self.encoder.feature_info.reduction())
             channels = tuple(int(value) for value in self.encoder.feature_info.channels())
             self._source_outputs = self._select_indices(reductions, model_name)
