@@ -1172,6 +1172,11 @@ def parse_model(d, ch, verbose=True, warehouse_manager=None):  # model_dict, inp
                 raise ValueError(f'DLA34Backbone expects a 3-channel image input, got {ch[f]}')
             c2 = (128, 256, 512)
             args = [*args, ch[f]]
+        elif m is BackboneAdapter:
+            if ch[f] != 3:
+                raise ValueError(f'BackboneAdapter expects a 3-channel image input, got {ch[f]}')
+            c2 = (128, 256, 512)
+            args = [*args, ch[f]]
         elif m is FeatureSelect:
             if not isinstance(ch[f], (tuple, list)) or len(ch[f]) != 3:
                 raise ValueError(f'FeatureSelect expects a 3-scale source, got {ch[f]}')

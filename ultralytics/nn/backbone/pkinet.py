@@ -8,13 +8,77 @@ try:
     from mmengine.model import BaseModule
     from mmengine.model import constant_init
     from mmengine.model.weight_init import trunc_normal_init, normal_init
-except ImportError as e:
-    pass
+except ImportError:
+    # PKINet's reference implementation is written for MMCV/MMEngine.  Keep
+    # the backbone usable in the lightweight Ultralytics environment by
+    # providing the small subset of those APIs used by this file.
+    class BaseModule(nn.Module):
+        def __init__(self, init_cfg=None, *args, **kwargs):
+            super().__init__()
+            self.init_cfg = init_cfg
+
+        def init_weights(self):
+            return None
+
+    def build_norm_layer(cfg, num_features):
+        cfg = cfg or {}
+        norm_type = cfg.get('type', 'BN') if isinstance(cfg, dict) else 'BN'
+        if norm_type not in ('BN', 'BN2d', 'BatchNorm2d'):
+            raise ValueError(f'Fallback PKINet only supports BN, got {norm_type!r}')
+        options = {key: value for key, value in cfg.items() if key in ('eps', 'momentum')}
+        return 'bn', nn.BatchNorm2d(num_features, **options)
+
+    class ConvModule(nn.Module):
+        def __init__(self, in_channels, out_channels, kernel_size, stride=1,
+                     padding=0, dilation=1, groups=1, bias='auto',
+                     conv_cfg=None, norm_cfg=None, act_cfg=None, **kwargs):
+            super().__init__()
+            if bias == 'auto':
+                bias = norm_cfg is None
+            self.conv = nn.Conv2d(in_channels, out_channels, kernel_size,
+                                  stride=stride, padding=padding,
+                                  dilation=dilation, groups=groups, bias=bias)
+            self.norm = None
+            if norm_cfg is not None:
+                self.norm = build_norm_layer(norm_cfg, out_channels)[1]
+            self.activate = None
+            if act_cfg is not None:
+                act_type = act_cfg.get('type', 'SiLU') if isinstance(act_cfg, dict) else 'SiLU'
+                if act_type.lower() in ('silu', 'swish'):
+                    self.activate = nn.SiLU(inplace=True)
+                elif act_type.lower() == 'relu':
+                    self.activate = nn.ReLU(inplace=True)
+                else:
+                    raise ValueError(f'Fallback PKINet does not support activation {act_type!r}')
+
+        def forward(self, x):
+            x = self.conv(x)
+            if self.norm is not None:
+                x = self.norm(x)
+            if self.activate is not None:
+                x = self.activate(x)
+            return x
+
+    def constant_init(module, val=1.0, bias=0.0):
+        nn.init.constant_(module.weight, val)
+        if module.bias is not None:
+            nn.init.constant_(module.bias, bias)
+
+    def trunc_normal_init(module, std=.02, bias=0.0):
+        nn.init.trunc_normal_(module.weight, std=std)
+        if module.bias is not None:
+            nn.init.constant_(module.bias, bias)
+
+    def normal_init(module, mean=0.0, std=1.0, bias=0.0):
+        nn.init.normal_(module.weight, mean=mean, std=std)
+        if module.bias is not None:
+            nn.init.constant_(module.bias, bias)
 
 try:
     from mmengine.model import BaseModule
-except ImportError as e:
-    BaseModule = nn.Module
+except ImportError:
+    # The fallback BaseModule above already provides the compatible API.
+    pass
 
 __all__ = ['PKINET_T', 'PKINET_S', 'PKINET_B']
 

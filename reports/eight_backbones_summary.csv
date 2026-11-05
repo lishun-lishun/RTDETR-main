@@ -1,0 +1,9 @@
+Model,Params,GFLOPs,AP50,AP75,AP50:95,Tiny AP,Small AP,Medium AP,Large AP,FPS,Latency,GPU Memory
+hgnetv2_b2,,,,,,,,,,,,
+convnextv2_pico,,,,,,,,,,,,
+fasternet_t1,,,,,,,,,,,,
+repvit_m1_1,,,,,,,,,,,,
+efficientvit_b1,,,,,,,,,,,,
+pvt_v2_b1,,,,,,,,,,,,
+lsknet_t,,,,,,,,,,,,
+pkinetv2_t,,,,,,,,,,,,
