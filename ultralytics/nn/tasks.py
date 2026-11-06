@@ -789,7 +789,7 @@ def parse_model(d, ch, verbose=True, warehouse_manager=None):  # model_dict, inp
         n = n_ = max(round(n * depth), 1) if n > 1 else n  # depth gain
         if m in (Classify, Conv, ConvTranspose, GhostConv, Bottleneck, GhostBottleneck, SPP, SPPF, DWConv, DSConv, Focus,
                  BottleneckCSP, C1, C2, C2f, C3, C3TR, C3Ghost, nn.Conv2d, nn.ConvTranspose2d, DWConvTranspose2d, C3x, RepC3,
-                 ConvNormLayer, DWRC3, C3_DWR, C2f_DWR, C3_DCNv2_Dynamic, C2f_DCNv2_Dynamic, BasicBlock_DCNv2_Dynamic, BottleNeck_DCNv2_Dynamic,
+                 ConvNormLayer, StemConvDown, AAStemPool, DWRC3, C3_DWR, C2f_DWR, C3_DCNv2_Dynamic, C2f_DCNv2_Dynamic, BasicBlock_DCNv2_Dynamic, BottleNeck_DCNv2_Dynamic,
                  C3_DCNv2, C2f_DCNv2, BasicBlock_DCNv2, BottleNeck_DCNv2, C3_DCNv3, C2f_DCNv3, BasicBlock_DCNv3, BottleNeck_DCNv3,
                  C3_iRMB, C2f_iRMB, C3_iRMB_Cascaded, C2f_iRMB_Cascaded, C3_Attention, C2f_Attention, C3_Ortho, C2f_Ortho,
                  C3_DySnakeConv, C2f_DySnakeConv, DySnakeConv,
@@ -1197,7 +1197,7 @@ def parse_model(d, ch, verbose=True, warehouse_manager=None):  # model_dict, inp
             c2 = make_divisible(min(requested_c2, max_channels) * width, 8)
             hidden = make_divisible(min(requested_hidden, max_channels) * width, 8)
             args = [c1, c2, hidden, *args[2:]]
-        elif m is Blocks:
+        elif m in {Blocks, ResNetDBlocks, P4DilatedBlocks, P4DeformableBlocks, P5PConvBlocks}:
             block_type = globals()[args[1]]
             c1, c2 = ch[f], args[0] * block_type.expansion
             args = [c1, args[0], block_type, *args[2:]]

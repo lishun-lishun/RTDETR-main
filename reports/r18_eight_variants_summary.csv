@@ -1,0 +1,11 @@
+Model,Seed,Description,Parameters,GFLOPs,FPS,mAP50,mAP75,mAP50:95,Tiny_AP,Small_AP,Medium_AP,Large_AP,Training_Status
+baseline,0,unchanged original RT-DETR-R18,,,,,,,,,,,not_started
+r18_stemconv,0,replace stem MaxPool with Conv3x3 stride 2,,,,,,,,,,,not_started
+r18_aastem,0,stride-1 MaxPool plus fixed BlurPool,,,,,,,,,,,not_started
+r18_resnetd,0,explicit ResNet-D downsampling shortcuts,,,,,,,,,,,not_started
+r18_p3deep,0,one additional Stage3 BasicBlock,,,,,,,,,,,not_started
+r18_p3wide,0,Stage3 output width 160,,,,,,,,,,,not_started
+r18_p4dilated,0,Stage4 second block branch2b dilation 2,,,,,,,,,,,not_started
+r18_p4dcn,0,Stage4 second block branch2b DeformConv2d,,,,,,,,,,,not_started
+r18_p5pconv,0,Stage5 second block branch2a PartialConv3,,,,,,,,,,,not_started
+hrnetv2_w18,reference,reference config: rtdetr_hrnet_w18.yaml,,,,,,,,,,,reference_only

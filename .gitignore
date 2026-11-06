@@ -150,6 +150,7 @@ tests/
 !/tests/test_csp_context_r18.py
 !/tests/test_ldw_r18.py
 !/tests/test_mirnet_det.py
+!/tests/test_r18_eight_variants.py
 !/tests/test_dla34_rtdetr.py
 !/tests/test_eight_backbones.py
 .DS_Store

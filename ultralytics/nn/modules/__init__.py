@@ -39,6 +39,11 @@ from .mirnet_det import (MIRStem, SpatialRearrangeDownsample, StrideDownsample,
 from .dla34_backbone import DLABasicBlock, DLARoot, DLATree, DLA34Backbone
 from .backbone_adapter import BackboneAdapter, BACKBONE_SPECS, resolve_timm_model_name
 from .pkinetv2_backbone import PKINetV2_T
+from .r18_backbone_variants import (StemConvDown, BlurPool, AAStemPool, ResNetDDownsample,
+                                    ResNetDBasicBlock, ResNetDBlocks, DilatedConvNorm,
+                                    DilatedBasicBlock, P4DilatedBlocks, DCNConvNorm,
+                                    DeformableBasicBlock, P4DeformableBlocks, PartialConv3,
+                                    PConvBasicBlock, P5PConvBlocks)
 
 # __all__ = ('Conv', 'Conv2', 'LightConv', 'RepConv', 'DWConv', 'DWConvTranspose2d', 'ConvTranspose', 'Focus',
 #            'GhostConv', 'ChannelAttention', 'SpatialAttention', 'CBAM', 'Concat', 'TransformerLayer',
