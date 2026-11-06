@@ -53,7 +53,7 @@ class TestR18EightVariants(unittest.TestCase):
     def test_specialized_modules(self):
         self.assertEqual(StemConvDown(64)(torch.zeros(1, 64, 320, 320)).shape[-2:], (160, 160))
         aa = AAStemPool(64)
-        self.assertEqual(aa.maxpool.stride, (1, 1))
+        self.assertIn(aa.maxpool.stride, (1, (1, 1)))
         self.assertEqual(aa.blurpool.stride, 2)
         self.assertTrue(torch.equal(aa.blurpool.kernel[0, 0].sum(), torch.tensor(1.0)))
         self.assertIsInstance(ResNetDBasicBlock(128, 256, 2, False).short, ResNetDDownsample)
@@ -103,11 +103,13 @@ class TestR18EightVariants(unittest.TestCase):
         for name, filename in CONFIGS.items():
             if name == "r18_p4dcn":
                 try:
-                    model = RTDETRDetectionModel(str(MODEL_DIR / filename), nc=1, verbose=False).train()
+                    # Use eval-mode prediction with gradients enabled.  Train-mode
+                    # RT-DETRDecoder requires a labeled batch for CDN loss inputs.
+                    model = RTDETRDetectionModel(str(MODEL_DIR / filename), nc=1, verbose=False).eval()
                 except RuntimeError as exc:
                     self.fail(f"R07 requires a working torchvision DeformConv2d operator: {exc}")
             else:
-                model = RTDETRDetectionModel(str(MODEL_DIR / filename), nc=1, verbose=False).train()
+                model = RTDETRDetectionModel(str(MODEL_DIR / filename), nc=1, verbose=False).eval()
             outputs = model(torch.randn(2, 3, 128, 128))
             values = tensors(outputs)
             self.assertTrue(values, name)
