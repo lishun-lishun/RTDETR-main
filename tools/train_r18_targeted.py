@@ -8,12 +8,33 @@ import argparse
 import csv
 import datetime as dt
 import json
+import os
 import subprocess
 import sys
 from pathlib import Path
 
 from r18_targeted_common import (CONFIGS, DATA, ROOT, config_path, git_state,
                                  local_package, preflight, protocol_settings, validate_yaml, write_json)
+
+
+def _local_cuda_device(value: str) -> str:
+    """Map a physical GPU id to its logical index under CUDA_VISIBLE_DEVICES."""
+    visible = os.environ.get("CUDA_VISIBLE_DEVICES", "").strip()
+    if not visible or value == "cpu" or not value.isdecimal():
+        return value
+    ids = [item.strip() for item in visible.split(",") if item.strip()]
+    if not ids:
+        return value
+    # With one visible GPU, CUDA always exposes it as cuda:0.  Accepting a
+    # physical id or a stale logical id here avoids the common `VISIBLE=3,
+    # --device 1` failure while preserving the selected physical card.
+    if len(ids) == 1:
+        return "0"
+    if value in ids:
+        return str(ids.index(value))
+    if int(value) < len(ids):
+        return value
+    return value
 
 
 def main():
@@ -31,6 +52,8 @@ def main():
     parser.add_argument("--dry-run", action="store_true", help="print the payload without training (default)")
     parser.add_argument("--execute", action="store_true", help="actually launch training (default is dry-run)")
     args = parser.parse_args()
+    requested_device = args.device
+    args.device = _local_cuda_device(args.device)
     if args.seed < 0:
         parser.error("seed must be nonnegative")
     if args.epochs is not None and args.epochs < 1:
@@ -47,7 +70,8 @@ def main():
         parser.error("resume must point to this run's weights/last.pt")
     settings, protocol = protocol_settings(args, parser)
     payload = {**contract, "model": args.model, "config": str(config), "output": str(output),
-               "settings": settings, "protocol": protocol, "git": git_state()}
+               "requested_device": requested_device, "settings": settings,
+               "protocol": protocol, "git": git_state()}
     print(json.dumps(payload, indent=2), flush=True)
     if not args.execute:
         return
