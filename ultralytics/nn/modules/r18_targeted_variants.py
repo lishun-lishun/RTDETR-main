@@ -83,7 +83,12 @@ class PhaseDown(nn.Module):
             weights = phases.new_full((x.shape[0], 4, 1, phases.shape[-2],
                                        phases.shape[-1]), 0.25)
         else:
-            weights = torch.softmax(self.weight(x).float(), dim=1).to(dtype=x.dtype).unsqueeze(2)
+            # PixelUnshuffle has spatial size H/2 x W/2.  Produce the phase
+            # logits at that same size before broadcasting over channels;
+            # using the original H x W logits causes a runtime broadcast
+            # error for every legal input size.
+            logits = F.avg_pool2d(self.weight(x), kernel_size=2, stride=2)
+            weights = torch.softmax(logits.float(), dim=1).to(dtype=x.dtype).unsqueeze(2)
         return (phases * weights).sum(dim=1)
 
 
@@ -196,6 +201,9 @@ class SKResidual(nn.Module):
         self.fc = nn.Sequential(nn.Conv2d(channels, hidden, 1, bias=True),
                                 nn.ReLU(inplace=True),
                                 nn.Conv2d(hidden, channels * 2, 1, bias=True))
+        # Explicit channel projection keeps the fused branch at the original
+        # Stage4 width (256) without adding BN or an activation after branch2b.
+        self.project = nn.Conv2d(channels, channels, 1, bias=False)
         self.last_branch_weights: Optional[torch.Tensor] = None
 
     @property
@@ -210,7 +218,7 @@ class SKResidual(nn.Module):
         logits = self.fc(self.pool(u)).view(x.shape[0], 2, self.channels, 1, 1)
         weights = torch.softmax(logits.float(), dim=1).to(dtype=x.dtype)
         self.last_branch_weights = weights.detach()
-        return a * weights[:, 0] + b * weights[:, 1]
+        return self.project(a * weights[:, 0] + b * weights[:, 1])
 
 
 class SemanticDetailFeedback(nn.Module):
