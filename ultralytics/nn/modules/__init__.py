@@ -44,6 +44,16 @@ from .r18_backbone_variants import (StemConvDown, BlurPool, AAStemPool, ResNetDD
                                     DilatedBasicBlock, P4DilatedBlocks, DCNConvNorm,
                                     DeformableBasicBlock, P4DeformableBlocks, PartialConv3,
                                     PConvBasicBlock, P5PConvBlocks)
+from .r18_targeted_variants import (LIPDown, PhaseDown, UniformPool, UniformPhaseDown,
+                                    ABSR, LCR, CoordRefine,
+                                    SKResidual, SemanticDetailFeedback, SFR,
+                                    LIPStage3Blocks, PhaseStage3Blocks,
+                                    ABSRStage3Blocks, LCRStage3Blocks,
+                                    CoordRefineStage3Blocks, SKStage4Blocks,
+                                    SDFStage4Blocks, SFRStage3Blocks,
+                                    AdaptiveBackgroundSmoothingResidual,
+                                    LocalContrastResidual, CoordinateRefine,
+                                    SparseForegroundResidual)
 
 # __all__ = ('Conv', 'Conv2', 'LightConv', 'RepConv', 'DWConv', 'DWConvTranspose2d', 'ConvTranspose', 'Focus',
 #            'GhostConv', 'ChannelAttention', 'SpatialAttention', 'CBAM', 'Concat', 'TransformerLayer',

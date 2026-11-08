@@ -153,6 +153,7 @@ tests/
 !/tests/test_r18_eight_variants.py
 !/tests/test_dla34_rtdetr.py
 !/tests/test_eight_backbones.py
+!/tests/test_r18_targeted_variants.py
 .DS_Store
 
 # Neural Network weights -----------------------------------------------------------------------------------------------

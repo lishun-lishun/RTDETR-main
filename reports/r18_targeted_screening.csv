@@ -1,0 +1,9 @@
+model,epochs,split,seed,status,metrics_path,notes
+r09_lipdown,40,val,0,not_run,,,screening placeholder; populate after explicit training
+r10_phasedown,40,val,0,not_run,,,screening placeholder; populate after explicit training
+r11_absr,40,val,0,not_run,,,screening placeholder; populate after explicit training
+r12_lcr,40,val,0,not_run,,,screening placeholder; populate after explicit training
+r13_coordrefine,40,val,0,not_run,,,screening placeholder; populate after explicit training
+r14_skresidual,40,val,0,not_run,,,screening placeholder; populate after explicit training
+r15_sdf,40,val,0,not_run,,,screening placeholder; populate after explicit training
+r16_sfr,40,val,0,not_run,,,screening placeholder; populate after explicit training

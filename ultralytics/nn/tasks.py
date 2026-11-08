@@ -1183,9 +1183,11 @@ def parse_model(d, ch, verbose=True, warehouse_manager=None):  # model_dict, inp
             c2 = (128, 256, 512)
             args = [*args, ch[f]]
         elif m is FeatureSelect:
-            if not isinstance(ch[f], (tuple, list)) or len(ch[f]) != 3:
-                raise ValueError(f'FeatureSelect expects a 3-scale source, got {ch[f]}')
+            if not isinstance(ch[f], (tuple, list)) or len(ch[f]) < 2:
+                raise ValueError(f'FeatureSelect expects a multi-scale source, got {ch[f]}')
             index = int(args[0])
+            if index < 0 or index >= len(ch[f]):
+                raise ValueError(f'FeatureSelect index {index} out of range for source {ch[f]}')
             c2 = ch[f][index]
         elif m in {LateDownStage, WidthMatchedEarlyDownStage}:
             # LDW stages take [c2, hidden_channels, num_blocks, stage_num, dilation?].
@@ -1197,10 +1199,26 @@ def parse_model(d, ch, verbose=True, warehouse_manager=None):  # model_dict, inp
             c2 = make_divisible(min(requested_c2, max_channels) * width, 8)
             hidden = make_divisible(min(requested_hidden, max_channels) * width, 8)
             args = [c1, c2, hidden, *args[2:]]
-        elif m in {Blocks, ResNetDBlocks, P4DilatedBlocks, P4DeformableBlocks, P5PConvBlocks}:
+        elif m in {Blocks, ResNetDBlocks, P4DilatedBlocks, P4DeformableBlocks, P5PConvBlocks,
+                   LIPStage3Blocks, PhaseStage3Blocks, ABSRStage3Blocks, LCRStage3Blocks,
+                   CoordRefineStage3Blocks, SKStage4Blocks, SFRStage3Blocks}:
             block_type = globals()[args[1]]
             c1, c2 = ch[f], args[0] * block_type.expansion
             args = [c1, args[0], block_type, *args[2:]]
+        elif m is SDFStage4Blocks:
+            # SDFStage4 computes Stage4 and returns both refined P3 and the
+            # original P4. Keep this as a tuple so FeatureSelect can route the
+            # two outputs to the unchanged neck/head graph.
+            block_type = globals()[args[1]]
+            c1, c4 = ch[f], args[0] * block_type.expansion
+            c2 = (c1, c4)
+            args = [c1, args[0], block_type, *args[2:]]
+        elif m is SemanticDetailFeedback:
+            channels = [ch[x] for x in f]
+            if len(channels) != 2:
+                raise ValueError(f'SemanticDetailFeedback expects [P3, P4], got {channels}')
+            c2 = channels[0]
+            args = [channels[0], channels[1], *args]
         elif m in {Pzconv, FCM, FCM_1, FCM_2, FCM_3}:
             c2 = ch[f]
             args = [c2]

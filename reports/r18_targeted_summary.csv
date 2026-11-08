@@ -1,0 +1,9 @@
+model,description,config
+r09_lipdown,local-importance weighted P2-to-P3 downsampling,rtdetr_r18_lipdown.yaml
+r10_phasedown,phase-aware PixelUnshuffle downsampling,rtdetr_r18_phasedown.yaml
+r11_absr,adaptive background smoothing residual at P3,rtdetr_r18_absr.yaml
+r12_lcr,local contrast residual at P3,rtdetr_r18_lcr.yaml
+r13_coordrefine,coordinate-attention residual refinement at P3,rtdetr_r18_coordrefine.yaml
+r14_skresidual,selective 3x3/5x5 depthwise Stage4 residual,rtdetr_r18_skresidual.yaml
+r15_sdf,semantic detail feedback from P4 into the P3 neck source,rtdetr_r18_sdf.yaml
+r16_sfr,saliency-gated feature residual at P3,rtdetr_r18_sfr.yaml
