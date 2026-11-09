@@ -1189,6 +1189,23 @@ def parse_model(d, ch, verbose=True, warehouse_manager=None):  # model_dict, inp
             if index < 0 or index >= len(ch[f]):
                 raise ValueError(f'FeatureSelect index {index} out of range for source {ch[f]}')
             c2 = ch[f][index]
+        elif m is HRStreamInit:
+            c1 = ch[f]
+            c2 = args[0] if args else 64
+            args = [c1, *args]
+        elif m in {HRUpdate3, HRUpdate4}:
+            if not isinstance(f, (list, tuple)) or len(f) != 2:
+                raise ValueError(f'{m.__name__} expects [hr, semantic] sources, got {f}')
+            # YAML contract is [H_previous, S_i].
+            c_hr, c_s = ch[f[0]], ch[f[1]]
+            c2 = c_hr
+            args = [c_s, c_hr, *args]
+        elif m in {HRInjectP3, HRInjectP4}:
+            if not isinstance(f, (list, tuple)) or len(f) != 2:
+                raise ValueError(f'{m.__name__} expects [semantic, hr] sources, got {f}')
+            c_s, c_hr = ch[f[0]], ch[f[1]]
+            c2 = c_s
+            args = [c_s, c_hr, *args]
         elif m in {LateDownStage, WidthMatchedEarlyDownStage}:
             # LDW stages take [c2, hidden_channels, num_blocks, stage_num, dilation?].
             # ``c1`` comes from the graph so YAML cannot accidentally duplicate it.

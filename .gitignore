@@ -178,3 +178,5 @@ pnnx*
 /ultralytics/assets/
 
 .codex
+# Keep the R17 HRD verification test in source deliveries.
+!/tests/test_r17_hrd.py

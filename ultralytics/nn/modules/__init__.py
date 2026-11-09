@@ -54,6 +54,9 @@ from .r18_targeted_variants import (LIPDown, PhaseDown, UniformPool, UniformPhas
                                     AdaptiveBackgroundSmoothingResidual,
                                     LocalContrastResidual, CoordinateRefine,
                                     SparseForegroundResidual)
+from .hrd_backbone import (HRStreamInit, HRUpdate3, HRInjectP3, HRUpdate4,
+                           HRInjectP4, HRExchangeStage3, HRExchangeStage4,
+                           HRDPResNet)
 
 # __all__ = ('Conv', 'Conv2', 'LightConv', 'RepConv', 'DWConv', 'DWConvTranspose2d', 'ConvTranspose', 'Focus',
 #            'GhostConv', 'ChannelAttention', 'SpatialAttention', 'CBAM', 'Concat', 'TransformerLayer',
