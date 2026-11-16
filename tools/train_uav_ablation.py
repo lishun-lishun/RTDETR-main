@@ -25,6 +25,14 @@ CONFIGS = {
     "e6_p2_queryonly": "rtdetr_r18_uav_p2_queryonly.yaml",
     "e7_p2_evidence": "rtdetr_r18_uav_p2_evidence.yaml",
     "e8_p2_all": "rtdetr_r18_uav_p2_all.yaml",
+    "tinyv2_off_control": "rtdetr_r18_tinyv2_off_control.yaml",
+    "tinyv2_m1_peak": "rtdetr_r18_tinyv2_m1_peak.yaml",
+    "tinyv2_m2_dn": "rtdetr_r18_tinyv2_m2_dn.yaml",
+    "tinyv2_m3_match": "rtdetr_r18_tinyv2_m3_match.yaml",
+    "tinyv2_m4_nwd": "rtdetr_r18_tinyv2_m4_nwd.yaml",
+    "tinyv2_m1_m3": "rtdetr_r18_tinyv2_m1_m3.yaml",
+    "tinyv2_m2_m4": "rtdetr_r18_tinyv2_m2_m4.yaml",
+    "tinyv2_all4": "rtdetr_r18_tinyv2_all4.yaml",
 }
 
 
@@ -36,7 +44,12 @@ def validate_config(name: str) -> Path:
     if cfg["backbone"] != base["backbone"] or cfg["head"][:-1] != base["head"][:-1]:
         raise ValueError(f"{name}: R18 backbone or neck differs from the baseline")
     head = cfg["head"][-1]
-    if name in ("e0_baseline", "e4_loss_only"):
+    if name.startswith("tinyv2_"):
+        if head[0] != [19, 22, 25] or head[2] != "TinyUAVDecoder" or head[3][2] != 300:
+            raise ValueError(f"{name}: expected P3/P4/P5 and exactly 300 TinyV2 queries")
+        if not isinstance(cfg.get("tiny_uav"), dict):
+            raise ValueError(f"{name}: missing tiny_uav settings")
+    elif name in ("e0_baseline", "e4_loss_only"):
         if head != base["head"][-1]:
             raise ValueError(f"{name}: expected the original RTDETRDecoder")
     else:
@@ -93,6 +106,15 @@ def main() -> None:
     if args.device != "cpu":
         if not args.device.isdecimal() or not torch.cuda.is_available() or int(args.device) >= torch.cuda.device_count():
             parser.error(f"CUDA device {args.device!r} is unavailable")
+    # Model construction precedes trainer seeding; seed here so all ablations
+    # start from identical R18 parameters when no checkpoint is supplied.
+    import random
+    import numpy as np
+    random.seed(args.seed)
+    np.random.seed(args.seed)
+    torch.manual_seed(args.seed)
+    if torch.cuda.is_available():
+        torch.cuda.manual_seed_all(args.seed)
     model = RTDETR(str(config))
     if args.init_weights:
         model.load(str(args.init_weights))

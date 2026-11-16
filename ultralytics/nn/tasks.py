@@ -449,11 +449,18 @@ class RTDETRDetectionModel(DetectionModel):
             verbose (bool, optional): Print additional information during initialization. Defaults to True.
         """
         super().__init__(cfg=cfg, ch=ch, nc=nc, verbose=verbose)
+        tiny = self.yaml.get("tiny_uav") or {}
+        if tiny and isinstance(self.model[-1], TinyUAVDecoder):
+            self.model[-1].configure(tiny)
 
     def init_criterion(self):
         """Initialize the loss criterion for the RTDETRDetectionModel."""
         from ultralytics.models.utils.loss import RTDETRDetectionLoss
 
+        tiny = self.yaml.get("tiny_uav")
+        if tiny:
+            from ultralytics.models.utils.tiny_uav_loss import TinyUAVRTDETRLoss
+            return TinyUAVRTDETRLoss(nc=self.nc, settings=tiny, use_vfl=True, use_sl=False, use_emasl=False, use_svfl=False, use_emasvfl=False, use_mal=False)
         cfg = self.yaml.get('uav_research', {})
         size = cfg.get('size_loss', {})
         if size.get('enabled', False):
@@ -982,7 +989,7 @@ def parse_model(d, ch, verbose=True, warehouse_manager=None):  # model_dict, inp
             args[0] = d[args[0]]
             c1, c2 = [ch[x] for x in f], (sum([ch[x] for x in f]) if args[0] == 'concat' else ch[f[0]])
             args = [c1, args[0]]
-        elif m in (RTDETRDecoder, UAVResearchDecoder):  # special case, channels arg must be passed in index 1
+        elif m in (RTDETRDecoder, UAVResearchDecoder, TinyUAVDecoder):  # special case, channels arg must be passed in index 1
             args.insert(1, [ch[x] for x in f])
         elif isinstance(m, str):
             t = m

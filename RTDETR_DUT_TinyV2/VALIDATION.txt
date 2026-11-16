@@ -1,0 +1,6 @@
+Validation on 2026-11-16
+Python compile: PASS
+CPU isolated logic tests: 5 PASS
+Dry-run installer on simulated expected repo: PASS
+Idempotent installer apply on simulated repo: PASS
+Full repository integration / A30 CUDA / training: NOT RUN

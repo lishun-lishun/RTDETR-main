@@ -20,6 +20,7 @@ Example:
 from .block import *
 from .conv import *
 from .head import *
+from .tiny_uav_decoder import TinyUAVDecoder
 from .transformer import *
 from .baps_rdcf import *
 from .lsce_adcf import *
