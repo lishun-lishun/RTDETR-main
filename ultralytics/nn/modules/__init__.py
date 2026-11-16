@@ -64,3 +64,5 @@ from .hrd_backbone import (HRStreamInit, HRUpdate3, HRInjectP3, HRUpdate4,
 #            'C2f', 'C3x', 'C3TR', 'C3Ghost', 'GhostBottleneck', 'Bottleneck', 'BottleneckCSP', 'Proto', 'Detect',
 #            'Segment', 'Pose', 'Classify', 'TransformerEncoderLayer', 'RepC3', 'RTDETRDecoder', 'AIFI',
 #            'DeformableTransformerDecoder', 'DeformableTransformerDecoderLayer', 'MSDeformAttn', 'MLP')
+
+from .uav_research_decoder import UAVResearchDecoder  # Optional UAV research head

@@ -451,6 +451,17 @@ class RTDETRDetectionModel(DetectionModel):
         """Initialize the loss criterion for the RTDETRDetectionModel."""
         from ultralytics.models.utils.loss import RTDETRDetectionLoss
 
+        cfg = self.yaml.get('uav_research', {})
+        size = cfg.get('size_loss', {})
+        if size.get('enabled', False):
+            from ultralytics.models.utils.uav_tiny_loss import SizeAwareRTDETRDetectionLoss
+            return SizeAwareRTDETRDetectionLoss(
+                nc=self.nc, use_vfl=True, use_sl=False, use_emasl=False,
+                use_svfl=False, use_emasvfl=False, use_mal=False,
+                geometry_weight=float(size.get('weight', 0.1)),
+                min_target_px=float(size.get('min_target_px', 6.0)),
+                max_scale_weight=float(size.get('max_scale_weight', 2.0)),
+                input_size=float(size.get('input_size', 640)))
         return RTDETRDetectionLoss(nc=self.nc, use_vfl=True, use_sl=False, use_emasl=False, use_svfl=False, use_emasvfl=False, use_mal=False)
 
     def loss(self, batch, preds=None):
@@ -968,7 +979,7 @@ def parse_model(d, ch, verbose=True, warehouse_manager=None):  # model_dict, inp
             args[0] = d[args[0]]
             c1, c2 = [ch[x] for x in f], (sum([ch[x] for x in f]) if args[0] == 'concat' else ch[f[0]])
             args = [c1, args[0]]
-        elif m is RTDETRDecoder:  # special case, channels arg must be passed in index 1
+        elif m in (RTDETRDecoder, UAVResearchDecoder):  # special case, channels arg must be passed in index 1
             args.insert(1, [ch[x] for x in f])
         elif isinstance(m, str):
             t = m
