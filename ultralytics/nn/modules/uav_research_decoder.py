@@ -190,15 +190,15 @@ class UAVResearchDecoder(RTDETRDecoder):
             x_base = x[1:]
         else:
             x_base = x
-        if not (self.use_refine or self.use_quality):
-            output = super().forward(x_base, batch=batch)
-            self._uav_p3 = None  # avoid retaining autograd graph
+        try:
+            original = super().forward(x_base, batch=batch)
+            detail = self._uav_p2 if self.p2_source else self._uav_p3
+        finally:
+            # A failed construction-time probe must not retain an activation.
             self._uav_p2 = None
-            return output
-        original = super().forward(x_base, batch=batch)
-        detail = self._uav_p2 if self.p2_source else self._uav_p3
-        self._uav_p2 = None
-        self._uav_p3 = None
+            self._uav_p3 = None
+        if not (self.use_refine or self.use_quality):
+            return original
         if detail is None:
             raise RuntimeError('Missing local evidence feature')
         if self.training:

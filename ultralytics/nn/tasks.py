@@ -280,7 +280,10 @@ class DetectionModel(BaseModel):
             try:
                 self.model.eval()
                 m.training = True
-                self.forward(torch.zeros(2, ch, 640, 640))
+                # This construction-time probe must not leave an autograd graph
+                # attached to a module: ModelEMA deep-copies the model later.
+                with torch.no_grad():
+                    self.forward(torch.zeros(2, ch, 640, 640))
             except (RuntimeError, ValueError) as e:
                 if 'Not implemented on the CPU' in str(e) or 'Input type (torch.FloatTensor) and weight type (torch.cuda.FloatTensor)' in str(e) or \
                 'CUDA tensor' in str(e) or 'is_cuda()' in str(e) or 'carafe_forward_impl' in str(e) or 'Pointer argument (at 0) cannot be accessed from Triton (cpu tensor?)' in str(e):

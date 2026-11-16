@@ -1,6 +1,5 @@
 import math
 import numpy as np
-import thop
 import torch
 import torch.nn as nn
 import torch.nn.functional as F
@@ -282,6 +281,7 @@ class SFS_Conv(nn.Module):
         return self.PWC_o(out1 + out2)
 
 if __name__ == "__main__":
+    import thop
 
     channel = 256
     height = width = 20
