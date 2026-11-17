@@ -472,6 +472,14 @@ class RTDETRDetectionModel(DetectionModel):
                 min_target_px=float(size.get('min_target_px', 6.0)),
                 max_scale_weight=float(size.get('max_scale_weight', 2.0)),
                 input_size=float(size.get('input_size', 640)))
+        # DUT-SPARSE-V3 OPT-IN -- training only; original R18 logic unchanged below.
+        if self.yaml.get('dut_sparse_v3'):
+            from ultralytics.models.utils.dut_sparse_supervision import DUTSparseCriterion
+            criterion = DUTSparseCriterion(
+                nc=self.nc, use_vfl=True, use_sl=False, use_emasl=False,
+                use_svfl=False, use_emasvfl=False, use_mal=False,
+                settings=self.yaml['dut_sparse_v3'])
+            return criterion
         return RTDETRDetectionLoss(nc=self.nc, use_vfl=True, use_sl=False, use_emasl=False, use_svfl=False, use_emasvfl=False, use_mal=False)
 
     def loss(self, batch, preds=None):
@@ -499,7 +507,12 @@ class RTDETRDetectionModel(DetectionModel):
             'batch_idx': batch_idx.to(img.device, dtype=torch.long).view(-1),
             'gt_groups': gt_groups}
 
-        preds = self.predict(img, batch=targets) if preds is None else preds
+        # DUT-SPARSE-V3 opt-in temporary encoder hook (no persistent hooks).
+        if self.yaml.get('dut_sparse_v3') and preds is None:
+            with self.criterion.capture_head(self.model[-1]):
+                preds = self.predict(img, batch=targets)
+        else:
+            preds = self.predict(img, batch=targets) if preds is None else preds
         dec_bboxes, dec_scores, enc_bboxes, enc_scores, dn_meta = preds if self.training else preds[1]
         if dn_meta is None:
             dn_bboxes, dn_scores = None, None
