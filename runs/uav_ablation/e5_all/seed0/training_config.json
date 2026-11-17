@@ -1,0 +1,51 @@
+{
+  "model": "e5_all",
+  "yaml": "/home/sict/Documents/AILAB/Dataset/lishun/rtdetr_uav/RTDETR-main/ultralytics/cfg/models/rt-detr/rtdetr_r18_uav_all.yaml",
+  "data": "/home/sict/Documents/AILAB/Dataset/lishun/rtdetr_uav/RTDETR-main/dataset/DUT-Anti-UAV.yaml",
+  "output": "/home/sict/Documents/AILAB/Dataset/lishun/rtdetr_uav/RTDETR-main/runs/uav_ablation/e5_all/seed0",
+  "init_weights": null,
+  "settings": {
+    "epochs": 150,
+    "patience": 0,
+    "batch": 8,
+    "imgsz": 640,
+    "cache": false,
+    "workers": 4,
+    "pretrained": false,
+    "optimizer": "AdamW",
+    "seed": 0,
+    "deterministic": true,
+    "cos_lr": false,
+    "close_mosaic": 0,
+    "amp": false,
+    "lr0": 0.0001,
+    "lrf": 1.0,
+    "momentum": 0.9,
+    "weight_decay": 0.0001,
+    "warmup_epochs": 2000,
+    "warmup_momentum": 0.8,
+    "warmup_bias_lr": 0.0,
+    "max_det": 300,
+    "mosaic": 0.0,
+    "mixup": 0.0,
+    "copy_paste": 0.0,
+    "data": "/home/sict/Documents/AILAB/Dataset/lishun/rtdetr_uav/RTDETR-main/dataset/DUT-Anti-UAV.yaml",
+    "device": "0",
+    "project": "/home/sict/Documents/AILAB/Dataset/lishun/rtdetr_uav/RTDETR-main/runs/uav_ablation/e5_all",
+    "name": "seed0",
+    "exist_ok": true,
+    "gradient_accumulation": 1
+  },
+  "protocol": {
+    "effective_batch": 8,
+    "micro_batch": 8,
+    "gradient_accumulation": 1,
+    "warmup_epochs_value": 2000,
+    "warmup_unit": "micro-batch iterations in this trainer"
+  },
+  "git": {
+    "commit": "5607e4a011c2efc8dc8f67985c4e6f13a09fa7bc",
+    "status": "M scripts/train_rtdetr_dut_3gpu_9_queue.sh\n?? diagnostics_output/\n?? r18_diagnostics.zip\n?? rtdetr_uav_packages_now.txt\n?? tools/diagnostics_output/\n?? tools/r18_diagnostics.zip\n?? ultralytics/cfg/models/rt-detr/rtdetr-HIFI.yaml\n?? ultralytics/cfg/models/rt-detr/rtdetr-MRFPN.yaml\n?? ultralytics/cfg/models/rt-detr/rtdetr-WTConv copy.yaml\n?? ultralytics/cfg/models/rt-detr/rtdetr-p2 copy.yaml\n?? ultralytics/cfg/models/rt-detr/rtdetr-r18 copy.yaml"
+  },
+  "started_at": "2026-11-16T10:36:42.679588+08:00"
+}
