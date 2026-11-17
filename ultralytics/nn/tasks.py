@@ -523,11 +523,13 @@ class RTDETRDetectionModel(DetectionModel):
         dec_bboxes = torch.cat([enc_bboxes.unsqueeze(0), dec_bboxes])  # (7, bs, 300, 4)
         dec_scores = torch.cat([enc_scores.unsqueeze(0), dec_scores])
 
+        extra_kwargs = {'apply_extra': self.training} if self.yaml.get('dut_sparse_v3') else {}
         loss = self.criterion((dec_bboxes, dec_scores),
                               targets,
                               dn_bboxes=dn_bboxes,
                               dn_scores=dn_scores,
-                              dn_meta=dn_meta)
+                              dn_meta=dn_meta,
+                              **extra_kwargs)
         
         loss_moe = torch.tensor(0.0, device=img.device)
         # MoE auxiliary loss

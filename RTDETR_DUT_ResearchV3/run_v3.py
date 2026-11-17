@@ -15,13 +15,14 @@ def main():
     p.add_argument('--exp',choices=NAME_TO_CONFIG,required=True)
     p.add_argument('--device',default='0')
     p.add_argument('--seed',type=int,default=0)
+    p.add_argument('--run-name',default=None,help='distinct output name for retries; seed remains unchanged')
     p.add_argument('--epochs',type=int,default=150)
     p.add_argument('--execute',action='store_true')
     a=p.parse_args()
     root=a.repo.resolve()
     model=root/'ultralytics/cfg/models/rt-detr'/NAME_TO_CONFIG[a.exp]
     data=root/'dataset/DUT-Anti-UAV.yaml'
-    dest=root/'runs/dut_sparse_v3'/a.exp/f'seed{a.seed}'
+    dest=root/'runs/dut_sparse_v3'/a.exp/(a.run_name or f'seed{a.seed}')
     if not model.is_file() or not data.is_file(): p.error('Model YAML or data YAML missing')
     opts=dict(data=str(data),epochs=a.epochs,patience=0,batch=8,imgsz=640,cache=False,
               workers=4,pretrained=False,optimizer='AdamW',seed=a.seed,

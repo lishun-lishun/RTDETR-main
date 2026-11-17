@@ -41,7 +41,13 @@ def main():
             "use_emasl=False, use_svfl=False, use_emasvfl=False, use_mal=False)")
     marker='DUT-SPARSE-V3 OPT-IN'
     original_forward='preds = self.predict(img, batch=targets) if preds is None else preds'
-    if marker not in old and (old.count(anchor)!=1 or old.count(original_forward)!=1):
+    original_loss_call='''loss = self.criterion((dec_bboxes, dec_scores),
+                              targets,
+                              dn_bboxes=dn_bboxes,
+                              dn_scores=dn_scores,
+                              dn_meta=dn_meta)'''
+    if marker not in old and (old.count(anchor)!=1 or old.count(original_forward)!=1
+                              or old.count(original_loss_call)!=1):
         p.error('Cannot locate unique criterion/forward anchors; stop and inspect')
     if marker in old:
         print('Criterion hook already installed; will not patch tasks.py again.')
@@ -65,6 +71,13 @@ def main():
         else:
             preds = self.predict(img, batch=targets) if preds is None else preds"""
         new=new.replace(original_forward,forward_patch,1)
+        new=new.replace(original_loss_call, '''extra_kwargs = {'apply_extra': self.training} if self.yaml.get('dut_sparse_v3') else {}
+        loss = self.criterion((dec_bboxes, dec_scores),
+                              targets,
+                              dn_bboxes=dn_bboxes,
+                              dn_scores=dn_scores,
+                              dn_meta=dn_meta,
+                              **extra_kwargs)''', 1)
     outputs={target/'dut_sparse_signals.py':HERE/'src/dut_sparse_signals.py',
              target/'dut_sparse_supervision.py':HERE/'src/dut_sparse_supervision.py'}
     yaml_outputs={}

@@ -42,7 +42,15 @@ def test_train_step_hook_cleanup_and_serialization(count, tmp_path):
 
 def test_eval_has_no_hook():
     model = RTDETRDetectionModel(str(YAML), nc=1, verbose=False).eval()
+    batch = {
+        'img': torch.rand(1, 3, 128, 128),
+        'cls': torch.tensor([[0]], dtype=torch.long),
+        'bboxes': torch.tensor([[.5, .5, .02, .02]]),
+        'batch_idx': torch.tensor([0]),
+    }
     with torch.no_grad():
-        out = model(torch.rand(1, 3, 128, 128))
+        out = model(batch['img'])
+        val_loss, _ = model.loss(batch, out)
     assert out[0].shape[1] == 300
+    assert torch.isfinite(val_loss)
     assert len(model.model[-1].enc_score_head._forward_hooks) == 0

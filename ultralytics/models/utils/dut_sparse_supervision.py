@@ -45,9 +45,12 @@ class DUTSparseCriterion(RTDETRDetectionLoss):
             for hook in hooks:
                 hook.remove()
 
-    def forward(self, preds, batch, dn_bboxes=None, dn_scores=None, dn_meta=None):
+    def forward(self, preds, batch, dn_bboxes=None, dn_scores=None, dn_meta=None,
+                apply_extra=True):
         try:
             original = super().forward(preds, batch, dn_bboxes, dn_scores, dn_meta)
+            if not apply_extra:
+                return original
             boxes, scores = preds
             # Matcher for the final decoder layer; standard assignment is unchanged.
             matches = self.matcher(boxes[-1].detach(),scores[-1].detach(),
