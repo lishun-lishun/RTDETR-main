@@ -77,22 +77,29 @@ def build_fair_train_kwargs(
         "deterministic": True,
         "project": project,
         "name": f"{exp_id}_seed{seed}",
-        "exist_ok": False,
+        "exist_ok": True,
         "pretrained": pretrained_weights if (pretrained_weights and os.path.exists(pretrained_weights)) else False,
     }
 
 
 def main():
     parser = argparse.ArgumentParser(description="Fair Training Launcher for RT-DETR UAV Innovations (E0-E10)")
+    default_data = (
+        "dataset/DUT-Anti-UAV.yaml"
+        if (REPO_ROOT / "dataset" / "DUT-Anti-UAV.yaml").is_file()
+        else "ultralytics/cfg/datasets/dut-anti-uav.yaml"
+    )
     parser.add_argument("--exp", type=str, required=True, choices=list(EXPERIMENT_MAP.keys()), help="Experiment ID (E0..E10)")
-    parser.add_argument("--data", type=str, default="ultralytics/cfg/datasets/dut-anti-uav.yaml", help="Dataset YAML path")
+    parser.add_argument("--data", type=str, default=default_data, help="Dataset YAML path")
     parser.add_argument("--weights", type=str, default="weights/rtdetr-r18.pt", help="Pretrained R18 checkpoint for backbone initialization")
     parser.add_argument("--epochs", type=int, default=150, help="Fixed training epochs (default: 150)")
-    parser.add_argument("--batch", type=int, default=16, help="Batch size (default: 16)")
+    parser.add_argument("--batch", type=int, default=8, help="Batch size (default: 8)")
+    parser.add_argument("--micro-batch", type=int, default=8, help="Micro-batch size (default: 8)")
     parser.add_argument("--imgsz", type=int, default=640, help="Input image size (default: 640)")
-    parser.add_argument("--device", type=str, default="0", help="CUDA device ID(s), e.g., '0' or '0,1'")
+    parser.add_argument("--device", type=str, default="0", help="CUDA device ID(s), e.g., '0' or '1'")
     parser.add_argument("--seed", type=int, default=0, help="Random seed (0, 1, 2)")
     parser.add_argument("--project", type=str, default="runs/uav_paper_ablation", help="Output directory root")
+    parser.add_argument("--execute", action="store_true", help="Start training; default is dry run")
     parser.add_argument("--dry-run", action="store_true", help="Print fair training config without launching GPU run")
     args = parser.parse_args()
 
@@ -118,8 +125,8 @@ def main():
     print(json.dumps(train_kwargs, indent=2, ensure_ascii=False))
     print("=" * 80)
 
-    if args.dry_run:
-        print("[DRY-RUN] Verified fair training recipe. Exiting without launching GPU training.")
+    if args.dry_run or not args.execute:
+        print("[DRY-RUN] Verified fair training recipe. Exiting without launching GPU training. Use --execute to start.")
         return
 
     import ultralytics
