@@ -24,6 +24,7 @@ Core Mathematical Mechanisms:
 """
 
 from __future__ import annotations
+import copy
 from typing import Dict, List, Optional, Tuple, Union
 
 import math
@@ -273,8 +274,6 @@ class WCASFP(nn.Module):
         z_obj = self.gate_head(gate_in)  # [B, 1, H, W]
         m_obj = torch.sigmoid(z_obj)  # [B, 1, H, W]
 
-        # Only the logits are needed for training supervision. Never retain
-        # autograd tensors on the module used by EMA/checkpoint deepcopy.
         self.last_obj_logits = z_obj if self.training else None
         self.last_obj_map = m_obj.detach() if self.training else None
 
@@ -283,6 +282,16 @@ class WCASFP(nn.Module):
         gain = self.get_residual_gain().to(dtype=p3_base.dtype)
         p3_enh = p3_base + gain * detail_feat  # [B, c_out, H, W]
         return p3_enh
+
+    def __deepcopy__(self, memo):
+        self.last_obj_logits = None
+        self.last_obj_map = None
+        cls = self.__class__
+        result = cls.__new__(cls)
+        memo[id(self)] = result
+        for k, v in self.__dict__.items():
+            setattr(result, k, copy.deepcopy(v, memo))
+        return result
 
 
 class ShallowEllipseAuxLoss(nn.Module):

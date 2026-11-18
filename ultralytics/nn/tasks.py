@@ -5,6 +5,11 @@ from ultralytics.nn.uav_innovations import (
     FAGAFusion,
     UADCRDecoder,
     SAHNWDRTDETRLoss,
+    DMBARepC3,
+    DMBABlock,
+    SSSCRepC3,
+    SSSCLite,
+    GLRoIDecoder,
 )
 # <<< [UAV_PAPER_INNOVATIONS_END] <<<
 # Ultralytics YOLO 🚀, AGPL-3.0 license
@@ -1025,7 +1030,17 @@ def parse_model(d, ch, verbose=True, warehouse_manager=None):  # model_dict, inp
             c1 = [ch[x] for x in f]
             c2 = sum(c1)
             args = [c1, *args]
-        elif m is UADCRDecoder:
+        elif m in (DMBARepC3, SSSCRepC3):
+            c1, c2 = ch[f], args[0]
+            if c2 != nc:
+                c2 = make_divisible(min(c2, max_channels) * width, 8)
+            args = [c1, c2, n, *args[1:]]
+            n = 1
+        elif m in (SSSCLite, DMBABlock):
+            c1 = ch[f]
+            c2 = c1
+            args = [c1, *args]
+        elif m in (UADCRDecoder, GLRoIDecoder):
             args.insert(1, [ch[x] for x in f])
         # <<< [UAV_PAPER_INNOVATIONS_END] <<<
         elif m in (RTDETRDecoder, UAVResearchDecoder, TinyUAVDecoder):  # special case, channels arg must be passed in index 1

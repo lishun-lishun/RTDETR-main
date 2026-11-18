@@ -1,18 +1,16 @@
 #!/usr/bin/env python3
 # -*- coding: utf-8 -*-
 """
-Unified Fair Training Launcher for RT-DETR UAV Paper Ablations (E0–E7)
-======================================================================
-Enforces strict experimental fairness across Original RT-DETR-R18 (E0)
-and all innovation variants (E1–E7):
-- Same dataset config (`dataset/DUT-Anti-UAV.yaml`)
-- Same Input Resolution (`imgsz=640`)
-- Same Optimizer (`optimizer='AdamW'`, `lr0=0.0001`, `lrf=1.0`, `weight_decay=0.0001`)
-- Same effective and micro batch (`8`) and workers (`4`)
-- Same Training Epochs (`epochs=150`, `patience=0` to prevent premature early-stop truncation!)
-- Same Augmentation Policy (`mosaic=0`, `close_mosaic=0`, `mixup=0`)
-- Same Pretrained Backbone Initialization Policy
-- Multi-seed reproducibility (`seed in [0, 1, 2]`)
+Unified Fair Training Launcher for RT-DETR UAV Paper Ablations (E0–E10)
+=======================================================================
+Aligned with commit `7b472a9` on `codex/uav-research-integration`:
+- Enforces local repository `ultralytics` import (`REPO_ROOT / 'ultralytics' / '__init__.py'`)
+- Resolves all config paths relative to `REPO_ROOT`
+- Supports both Phase-1 innovations (`E0–E7`) and the 3 new standalone innovations on
+  Original `RT-DETR-R18`:
+  - `E8`: Innovation 5 (`rtdetr-r18-inno5-dmba.yaml` — Directional Motion-Blur Anisotropic Deblurring)
+  - `E9`: Innovation 6 (`rtdetr-r18-inno6-sssc.yaml` — Signed Sparse Semantic Calibration)
+  - `E10`: Innovation 7 (`rtdetr-r18-inno7-glroi.yaml` — In-Network Global-Local P2 RoI Re-Sampler)
 """
 
 from __future__ import annotations
@@ -26,18 +24,20 @@ from typing import Dict
 REPO_ROOT = Path(__file__).resolve().parents[2]
 sys.path.insert(0, str(REPO_ROOT))
 
+ABLATION_DIR = REPO_ROOT / "RTDETR_UAV_Paper_Innovations" / "experiments" / "ablation_configs"
+
 EXPERIMENT_MAP: Dict[str, str] = {
-    exp: str(REPO_ROOT / "RTDETR_UAV_Paper_Innovations" / "experiments" / "ablation_configs" / filename)
-    for exp, filename in {
-        "E0": "E0_baseline_rtdetr_r18.yaml",
-        "E1": "E1_inno1_wcasfp.yaml",
-        "E2": "E2_inno2_faga.yaml",
-        "E3": "E3_inno3_uadcr.yaml",
-        "E4": "E4_inno4_sahnwd.yaml",
-        "E5": "E5_combo_A_feature_neck.yaml",
-        "E6": "E6_combo_B_decoder_loss.yaml",
-        "E7": "E7_final_joint_model.yaml",
-    }.items()
+    "E0": str(ABLATION_DIR / "E0_baseline_rtdetr_r18.yaml"),
+    "E1": str(ABLATION_DIR / "E1_inno1_wcasfp.yaml"),
+    "E2": str(ABLATION_DIR / "E2_inno2_faga.yaml"),
+    "E3": str(ABLATION_DIR / "E3_inno3_uadcr.yaml"),
+    "E4": str(ABLATION_DIR / "E4_inno4_sahnwd.yaml"),
+    "E5": str(ABLATION_DIR / "E5_combo_A_feature_neck.yaml"),
+    "E6": str(ABLATION_DIR / "E6_combo_B_decoder_loss.yaml"),
+    "E7": str(ABLATION_DIR / "E7_final_joint_model.yaml"),
+    "E8": str(ABLATION_DIR / "E8_inno5_dmba.yaml"),
+    "E9": str(ABLATION_DIR / "E9_inno6_sssc.yaml"),
+    "E10": str(ABLATION_DIR / "E10_inno7_glroi.yaml"),
 }
 
 
@@ -47,62 +47,59 @@ def build_fair_train_kwargs(
     data_yaml: str,
     pretrained_weights: str,
     epochs: int = 150,
-    batch: int = 8,
+    batch: int = 16,
     imgsz: int = 640,
     device: str = "0",
     seed: int = 0,
     project: str = "runs/uav_paper_ablation",
 ) -> dict:
     return {
+        "model": model_yaml,
         "data": data_yaml,
         "epochs": int(epochs),
-        "patience": 0,          # CRITICAL: Disable early stopping so all runs complete exact 150 epochs!
+        "patience": 0,          # Disable early stopping so all runs complete exact 150 epochs
         "batch": int(batch),
         "imgsz": int(imgsz),
         "device": device,
-        "workers": 4,
+        "workers": 8,
         "optimizer": "AdamW",
         "lr0": 0.0001,
-        "lrf": 1.0,
+        "lrf": 0.1,
         "momentum": 0.9,
         "weight_decay": 0.0001,
-        "warmup_epochs": 2000,
-        "cos_lr": False,
-        "amp": False,
-        "mosaic": 0.0,
-        "close_mosaic": 0,
+        "warmup_epochs": 3.0,
+        "cos_lr": True,
+        "amp": True,
+        "mosaic": 1.0,
+        "close_mosaic": 15,
         "mixup": 0.0,
-        "copy_paste": 0.0,
-        "gradient_accumulation": 1,
         "seed": int(seed),
         "deterministic": True,
         "project": project,
         "name": f"{exp_id}_seed{seed}",
-        "exist_ok": True,
-        "pretrained": False,
+        "exist_ok": False,
+        "pretrained": pretrained_weights if (pretrained_weights and os.path.exists(pretrained_weights)) else False,
     }
 
 
 def main():
-    parser = argparse.ArgumentParser(description="Fair Training Launcher for RT-DETR UAV Innovations (E0-E7)")
-    parser.add_argument("--exp", type=str, required=True, choices=list(EXPERIMENT_MAP.keys()), help="Experiment ID (E0..E7)")
-    parser.add_argument("--data", type=str, default="dataset/DUT-Anti-UAV.yaml", help="Dataset YAML path")
-    parser.add_argument("--weights", type=str, default="", help="Optional identical R18 initialization checkpoint")
+    parser = argparse.ArgumentParser(description="Fair Training Launcher for RT-DETR UAV Innovations (E0-E10)")
+    parser.add_argument("--exp", type=str, required=True, choices=list(EXPERIMENT_MAP.keys()), help="Experiment ID (E0..E10)")
+    parser.add_argument("--data", type=str, default="ultralytics/cfg/datasets/dut-anti-uav.yaml", help="Dataset YAML path")
+    parser.add_argument("--weights", type=str, default="weights/rtdetr-r18.pt", help="Pretrained R18 checkpoint for backbone initialization")
     parser.add_argument("--epochs", type=int, default=150, help="Fixed training epochs (default: 150)")
-    parser.add_argument("--batch", type=int, default=8, help="Effective batch size (default: 8)")
-    parser.add_argument("--micro-batch", type=int, default=8, help="Per-step batch size (default: 8)")
+    parser.add_argument("--batch", type=int, default=16, help="Batch size (default: 16)")
     parser.add_argument("--imgsz", type=int, default=640, help="Input image size (default: 640)")
     parser.add_argument("--device", type=str, default="0", help="CUDA device ID(s), e.g., '0' or '0,1'")
-    parser.add_argument("--seed", type=int, default=0, help="Random seed (use 0, 1, 2 for 3-seed significance test)")
+    parser.add_argument("--seed", type=int, default=0, help="Random seed (0, 1, 2)")
     parser.add_argument("--project", type=str, default="runs/uav_paper_ablation", help="Output directory root")
-    parser.add_argument("--execute", action="store_true", help="Start training; default is dry run")
+    parser.add_argument("--dry-run", action="store_true", help="Print fair training config without launching GPU run")
     args = parser.parse_args()
-    if args.batch != 8 or args.micro_batch != 8:
-        parser.error('This comparison protocol requires --batch 8 --micro-batch 8')
 
     model_yaml = EXPERIMENT_MAP[args.exp]
     if not Path(model_yaml).is_file():
-        parser.error(f'Model YAML missing: {model_yaml}')
+        parser.error(f"Model config file not found: {model_yaml}")
+
     train_kwargs = build_fair_train_kwargs(
         exp_id=args.exp,
         model_yaml=model_yaml,
@@ -121,27 +118,24 @@ def main():
     print(json.dumps(train_kwargs, indent=2, ensure_ascii=False))
     print("=" * 80)
 
-    if not args.execute:
+    if args.dry_run:
         print("[DRY-RUN] Verified fair training recipe. Exiting without launching GPU training.")
         return
 
     import ultralytics
-    if Path(ultralytics.__file__).resolve() != REPO_ROOT / 'ultralytics' / '__init__.py':
-        parser.error(f'Expected local Ultralytics, got {ultralytics.__file__}')
-    from ultralytics import RTDETR
+    expected_init = (REPO_ROOT / "ultralytics" / "__init__.py").resolve()
+    actual_init = Path(ultralytics.__file__).resolve()
+    if actual_init != expected_init:
+        raise RuntimeError(f"Imported external ultralytics ({actual_init}) instead of repo ({expected_init})!")
 
-    if not Path(args.data).is_file():
-        parser.error(f'Dataset YAML missing: {args.data}')
+    from ultralytics import RTDETR
 
     model = RTDETR(model_yaml)
     if args.weights and os.path.exists(args.weights):
         print(f"[INFO] Loading matching pretrained weights from {args.weights}")
         model.load(args.weights)
 
-    # Save exact training protocol metadata
     out_dir = Path(args.project) / f"{args.exp}_seed{args.seed}"
-    if out_dir.exists():
-        parser.error(f'Output already exists: {out_dir}')
     out_dir.mkdir(parents=True, exist_ok=True)
     (out_dir / "training_config.json").write_text(
         json.dumps(train_kwargs, indent=2, ensure_ascii=False), encoding="utf-8"

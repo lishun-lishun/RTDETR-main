@@ -28,6 +28,9 @@ CONFIGS = [
     'rtdetr-r18-combo-a.yaml',
     'rtdetr-r18-combo-b.yaml',
     'rtdetr-r18-uav-paper-full.yaml',
+    'rtdetr-r18-inno5-dmba.yaml',
+    'rtdetr-r18-inno6-sssc.yaml',
+    'rtdetr-r18-inno7-glroi.yaml',
 ]
 
 

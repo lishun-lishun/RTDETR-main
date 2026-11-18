@@ -1,0 +1,10 @@
+# Innovation 6: Signed Sparse Semantic Calibration (SSSC-Lite / SSSCRepC3)
+innovation_6:
+  name: "SSSCRepC3"
+  enabled: true
+  top_k: 128
+  max_offset: 0.25
+  norm_tau: 2.0
+  beta_max: 0.35
+  init_gain: 0.0
+  target_layers: [19, 22]  # Replaces RepC3 at P3/8 (Layer 19) and P4/16 (Layer 22) in rtdetr-r18.yaml

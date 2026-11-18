@@ -1,0 +1,12 @@
+# Innovation 7: In-Network Global-Local High-Resolution P2 RoI Re-Sampling Decoder (GLRoIDecoder)
+innovation_7:
+  name: "GLRoIDecoder"
+  enabled: true
+  top_m: 16
+  roi_grid_size: 5
+  context_pad: 1.5
+  tau_area: 0.02
+  alpha_max: 0.35
+  box_max: 0.15
+  init_gain: 0.0
+  target_layer: 26  # Replaces RTDETRDecoder at Layer 26 with inputs [4 (P2), 19 (P3), 22 (P4), 25 (P5)]

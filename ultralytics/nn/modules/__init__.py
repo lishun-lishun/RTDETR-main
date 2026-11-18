@@ -67,7 +67,15 @@ from .hrd_backbone import (HRStreamInit, HRUpdate3, HRInjectP3, HRUpdate4,
 #            'DeformableTransformerDecoder', 'DeformableTransformerDecoderLayer', 'MSDeformAttn', 'MLP')
 
 from .uav_research_decoder import UAVResearchDecoder  # Optional UAV research head
-
 # >>> [UAV_PAPER_INNOVATIONS_BEGIN] >>>
-from ultralytics.nn.uav_innovations import WCASFP, FAGAFusion, UADCRDecoder
+from ultralytics.nn.uav_innovations import (
+    WCASFP,
+    FAGAFusion,
+    UADCRDecoder,
+    DMBARepC3,
+    DMBABlock,
+    SSSCRepC3,
+    SSSCLite,
+    GLRoIDecoder,
+)
 # <<< [UAV_PAPER_INNOVATIONS_END] <<<

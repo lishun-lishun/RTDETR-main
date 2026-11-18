@@ -180,3 +180,10 @@ pnnx*
 .codex
 # Keep the R17 HRD verification test in source deliveries.
 !/tests/test_r17_hrd.py
+
+# Local integration & environment temporary artifacts
+.pypkg/
+.yolo/
+.uav_paper_backup/
+RTDETR_UAV_Paper_Innovations.zip
+

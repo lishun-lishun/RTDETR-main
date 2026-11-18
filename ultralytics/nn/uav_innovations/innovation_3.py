@@ -157,9 +157,9 @@ def get_cdn_group_uav(
     num_group = 1 if num_group == 0 else num_group
 
     bs = len(gt_groups)
-    gt_cls = batch["cls"]          # [total_num]
+    gt_cls = batch["cls"].view(-1)          # [total_num]
     gt_bbox = batch["bboxes"]      # [total_num, 4]
-    b_idx = batch["batch_idx"]     # [total_num]
+    b_idx = batch["batch_idx"].view(-1)     # [total_num]
     device = gt_bbox.device
 
     dn_cls = gt_cls.repeat(2 * num_group)            # [2*num_group*total_num]
@@ -223,6 +223,9 @@ def get_cdn_group_uav(
         "dn_num_split": [num_dn_total, num_queries],
     }
     return padding_cls, padding_bbox, attn_mask, dn_meta
+
+
+_get_cdn_group_fallback = get_cdn_group_uav
 
 
 class MLP(nn.Module):
@@ -482,7 +485,7 @@ class UADDeformableDecoderLayer(nn.Module):
         # 2. Cross attention with Variance Floor + Target-Decoupled Gate
         tgt_cross = self.cross_attn(
             self.with_pos_embed(embed, query_pos),
-            refer_bbox.unsqueeze(2),
+            refer_bbox.unsqueeze(2) if refer_bbox.dim() == 3 else refer_bbox,
             feats,
             shapes,
             padding_mask,

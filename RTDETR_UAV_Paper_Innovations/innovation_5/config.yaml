@@ -1,0 +1,8 @@
+# Innovation 5: Directional Motion-Blur Anisotropic Deblurring Block (DMBA / DMBARepC3)
+innovation_5:
+  name: "DMBARepC3"
+  enabled: true
+  strip_k: 7
+  gamma_max: 0.35
+  init_gain: 0.0
+  target_layers: [19, 22]  # Replaces RepC3 at P3/8 (Layer 19) and P4/16 (Layer 22) in rtdetr-r18.yaml
