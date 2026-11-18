@@ -458,6 +458,9 @@ class RTDETRDetectionModel(DetectionModel):
             verbose (bool, optional): Print additional information during initialization. Defaults to True.
         """
         super().__init__(cfg=cfg, ch=ch, nc=nc, verbose=verbose)
+        # DetectionModel stores the resolved class count in yaml, while RT-DETR
+        # criterion construction (including opt-in UAV losses) reads self.nc.
+        self.nc = self.yaml['nc']
         tiny = self.yaml.get("tiny_uav") or {}
         if tiny and isinstance(self.model[-1], TinyUAVDecoder):
             self.model[-1].configure(tiny)
