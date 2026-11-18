@@ -23,15 +23,21 @@ import sys
 from pathlib import Path
 from typing import Dict
 
+REPO_ROOT = Path(__file__).resolve().parents[2]
+sys.path.insert(0, str(REPO_ROOT))
+
 EXPERIMENT_MAP: Dict[str, str] = {
-    "E0": "experiments/ablation_configs/E0_baseline_rtdetr_r18.yaml",
-    "E1": "experiments/ablation_configs/E1_inno1_wcasfp.yaml",
-    "E2": "experiments/ablation_configs/E2_inno2_faga.yaml",
-    "E3": "experiments/ablation_configs/E3_inno3_uadcr.yaml",
-    "E4": "experiments/ablation_configs/E4_inno4_sahnwd.yaml",
-    "E5": "experiments/ablation_configs/E5_combo_A_feature_neck.yaml",
-    "E6": "experiments/ablation_configs/E6_combo_B_decoder_loss.yaml",
-    "E7": "experiments/ablation_configs/E7_final_joint_model.yaml",
+    exp: str(REPO_ROOT / "RTDETR_UAV_Paper_Innovations" / "experiments" / "ablation_configs" / filename)
+    for exp, filename in {
+        "E0": "E0_baseline_rtdetr_r18.yaml",
+        "E1": "E1_inno1_wcasfp.yaml",
+        "E2": "E2_inno2_faga.yaml",
+        "E3": "E3_inno3_uadcr.yaml",
+        "E4": "E4_inno4_sahnwd.yaml",
+        "E5": "E5_combo_A_feature_neck.yaml",
+        "E6": "E6_combo_B_decoder_loss.yaml",
+        "E7": "E7_final_joint_model.yaml",
+    }.items()
 }
 
 
@@ -95,6 +101,8 @@ def main():
         parser.error('This comparison protocol requires --batch 8 --micro-batch 8')
 
     model_yaml = EXPERIMENT_MAP[args.exp]
+    if not Path(model_yaml).is_file():
+        parser.error(f'Model YAML missing: {model_yaml}')
     train_kwargs = build_fair_train_kwargs(
         exp_id=args.exp,
         model_yaml=model_yaml,
@@ -117,6 +125,9 @@ def main():
         print("[DRY-RUN] Verified fair training recipe. Exiting without launching GPU training.")
         return
 
+    import ultralytics
+    if Path(ultralytics.__file__).resolve() != REPO_ROOT / 'ultralytics' / '__init__.py':
+        parser.error(f'Expected local Ultralytics, got {ultralytics.__file__}')
     from ultralytics import RTDETR
 
     if not Path(args.data).is_file():

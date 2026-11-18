@@ -5,10 +5,18 @@ import argparse
 from copy import deepcopy
 from pathlib import Path
 from tempfile import TemporaryDirectory
+import sys
+
+ROOT = Path(__file__).resolve().parents[1]
+sys.path.insert(0, str(ROOT))
 
 import torch
 
+import ultralytics
 from ultralytics.nn.tasks import RTDETRDetectionModel
+
+if Path(ultralytics.__file__).resolve() != ROOT / 'ultralytics' / '__init__.py':
+    raise RuntimeError(f'Expected local Ultralytics in {ROOT}, got {ultralytics.__file__}')
 
 
 CONFIGS = [
