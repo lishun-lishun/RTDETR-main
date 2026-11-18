@@ -20,6 +20,7 @@ if Path(ultralytics.__file__).resolve() != ROOT / 'ultralytics' / '__init__.py':
 
 
 CONFIGS = [
+    'rtdetr-r18.yaml',
     'rtdetr-r18-inno1-wcasfp.yaml',
     'rtdetr-r18-inno2-faga.yaml',
     'rtdetr-r18-inno3-uadcr.yaml',
@@ -45,12 +46,13 @@ def main():
     parser = argparse.ArgumentParser(description=__doc__)
     parser.add_argument('--device', default='cuda:0')
     parser.add_argument('--size', type=int, default=128)
+    parser.add_argument('--config', choices=CONFIGS, help='Test one YAML; default tests baseline and all variants')
     args = parser.parse_args()
     device = torch.device(args.device)
     if device.type == 'cuda' and not torch.cuda.is_available():
         parser.error('CUDA is unavailable')
     base = Path('ultralytics/cfg/models/rt-detr')
-    for name in CONFIGS:
+    for name in ([args.config] if args.config else CONFIGS):
         model = RTDETRDetectionModel(str(base / name), nc=1, verbose=False).to(device)
         model.eval()
         with torch.no_grad():
