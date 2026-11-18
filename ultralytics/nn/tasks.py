@@ -1500,6 +1500,7 @@ def _uav_loss(self, batch, preds=None):
                 aux_s_loss = self._shallow_aux_criterion(m.last_obj_logits, batch)
                 total_loss = total_loss + aux_s_loss
                 m.last_obj_logits = None
+                m.last_obj_map = None
     return total_loss, loss_items
 
 

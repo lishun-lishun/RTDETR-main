@@ -273,8 +273,10 @@ class WCASFP(nn.Module):
         z_obj = self.gate_head(gate_in)  # [B, 1, H, W]
         m_obj = torch.sigmoid(z_obj)  # [B, 1, H, W]
 
-        self.last_obj_logits = z_obj
-        self.last_obj_map = m_obj
+        # Only the logits are needed for training supervision. Never retain
+        # autograd tensors on the module used by EMA/checkpoint deepcopy.
+        self.last_obj_logits = z_obj if self.training else None
+        self.last_obj_map = m_obj.detach() if self.training else None
 
         # 5. Filtered boundary injection into P3 with conservative residual gain
         detail_feat = self.detail_refine(torch.cat([u_ll, f_hf_mod], dim=1) * m_obj)  # [B, c_out, H, W]
