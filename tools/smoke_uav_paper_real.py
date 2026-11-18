@@ -60,13 +60,22 @@ def main():
         for count, amp in ((0, False), (1, False), (3, True)):
             model.zero_grad(set_to_none=True)
             batch = batch_for(device, count, args.size)
+            print(f'{name}: GT={count}, AMP={amp}', flush=True)
             with torch.autocast(device_type='cuda', dtype=torch.float16,
                                 enabled=amp and device.type == 'cuda'):
                 loss, parts = model(batch)
-            assert torch.isfinite(loss) and torch.isfinite(parts).all(), name
-            loss.backward()
-            grads = [p.grad for p in model.parameters() if p.grad is not None]
-            assert grads and all(torch.isfinite(g).all() for g in grads), name
+            if not torch.isfinite(loss) or not torch.isfinite(parts).all():
+                raise AssertionError(f'{name}: GT={count}, AMP={amp}, nonfinite loss={loss.item()}, parts={parts}')
+            # FP16 backward must use loss scaling, as in a real AMP trainer.
+            scaler = torch.cuda.amp.GradScaler(enabled=amp and device.type == 'cuda', init_scale=1.0)
+            scaler.scale(loss).backward()
+            grads = [(param_name, p.grad) for param_name, p in model.named_parameters() if p.grad is not None]
+            bad = [param_name for param_name, grad in grads if not torch.isfinite(grad).all()]
+            if not grads or bad:
+                raise AssertionError(
+                    f'{name}: GT={count}, AMP={amp}, loss={loss.item():.6g}, '
+                    f'gradient_tensors={len(grads)}, nonfinite_gradients={bad[:12]}'
+                )
         with TemporaryDirectory() as tmp:
             path = Path(tmp) / 'checkpoint.pt'
             torch.save({'model': model, 'ema': deepcopy(model)}, path)
