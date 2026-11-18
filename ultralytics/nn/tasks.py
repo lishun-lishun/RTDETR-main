@@ -1,3 +1,12 @@
+# >>> [UAV_PAPER_INNOVATIONS_BEGIN] >>>
+from ultralytics.nn.uav_innovations import (
+    WCASFP,
+    ShallowEllipseAuxLoss,
+    FAGAFusion,
+    UADCRDecoder,
+    SAHNWDRTDETRLoss,
+)
+# <<< [UAV_PAPER_INNOVATIONS_END] <<<
 # Ultralytics YOLO 🚀, AGPL-3.0 license
 
 from ultralytics.nn.backbone.lsnet import SKA
@@ -1004,6 +1013,18 @@ def parse_model(d, ch, verbose=True, warehouse_manager=None):  # model_dict, inp
             args[0] = d[args[0]]
             c1, c2 = [ch[x] for x in f], (sum([ch[x] for x in f]) if args[0] == 'concat' else ch[f[0]])
             args = [c1, args[0]]
+        # >>> [UAV_PAPER_INNOVATIONS_BEGIN] >>>
+        elif m is WCASFP:
+            c1 = [ch[x] for x in f] if isinstance(f, list) else ch[f]
+            c2 = args[0] if len(args) > 0 else 256
+            args = [c1, c2, *args[1:]]
+        elif m is FAGAFusion:
+            c1 = [ch[x] for x in f]
+            c2 = sum(c1)
+            args = [c1, *args]
+        elif m is UADCRDecoder:
+            args.insert(1, [ch[x] for x in f])
+        # <<< [UAV_PAPER_INNOVATIONS_END] <<<
         elif m in (RTDETRDecoder, UAVResearchDecoder, TinyUAVDecoder):  # special case, channels arg must be passed in index 1
             args.insert(1, [ch[x] for x in f])
         elif isinstance(m, str):
@@ -1435,3 +1456,50 @@ def guess_model_task(model):
     LOGGER.warning("WARNING ⚠️ Unable to automatically guess model task, assuming 'task=detect'. "
                    "Explicitly define task for your model, i.e. 'task=detect', 'segment', 'classify', or 'pose'.")
     return 'detect'  # assume detect
+
+# >>> [UAV_PAPER_INNOVATIONS_BEGIN] >>>
+_ORIG_RTDETR_INIT_CRITERION = RTDETRDetectionModel.init_criterion
+_ORIG_RTDETR_LOSS = RTDETRDetectionModel.loss
+
+
+def _uav_init_criterion(self):
+    yaml_cfg = getattr(self, "yaml", {}) or {}
+    inno4_cfg = yaml_cfg.get("innovation_4", {})
+    if isinstance(inno4_cfg, dict) and inno4_cfg.get("enabled", False):
+        return SAHNWDRTDETRLoss(
+            nc=self.nc,
+            aux_loss=True,
+            use_fl=True,
+            use_vfl=True,
+            tau_s=float(inno4_cfg.get("tau_s", 0.0025)),
+            constant_c=float(inno4_cfg.get("constant_c", 12.8)),
+            img_size=float(inno4_cfg.get("img_size", 640.0)),
+            r_min=float(inno4_cfg.get("r_min", 1.00)),
+            r_max=float(inno4_cfg.get("r_max", 1.30)),
+            omega_nwd=float(inno4_cfg.get("omega_nwd", 0.50)),
+            gamma_mal=float(inno4_cfg.get("gamma_mal", 1.5)),
+            lambda_lsd=float(inno4_cfg.get("lambda_lsd", 0.50)),
+            enabled=True,
+        )
+    return _ORIG_RTDETR_INIT_CRITERION(self)
+
+
+def _uav_loss(self, batch, preds=None):
+    total_loss, loss_items = _ORIG_RTDETR_LOSS(self, batch, preds=preds)
+    if self.training:
+        for m in self.model:
+            if isinstance(m, WCASFP) and m.enabled and m.last_obj_logits is not None:
+                if not hasattr(self, "_shallow_aux_criterion"):
+                    yaml_cfg = getattr(self, "yaml", {}) or {}
+                    inno1_cfg = yaml_cfg.get("innovation_1", {})
+                    w = float(inno1_cfg.get("aux_shallow_loss_weight", 0.25)) if isinstance(inno1_cfg, dict) else 0.25
+                    self._shallow_aux_criterion = ShallowEllipseAuxLoss(loss_weight=w)
+                aux_s_loss = self._shallow_aux_criterion(m.last_obj_logits, batch)
+                total_loss = total_loss + aux_s_loss
+                m.last_obj_logits = None
+    return total_loss, loss_items
+
+
+RTDETRDetectionModel.init_criterion = _uav_init_criterion
+RTDETRDetectionModel.loss = _uav_loss
+# <<< [UAV_PAPER_INNOVATIONS_END] <<<
