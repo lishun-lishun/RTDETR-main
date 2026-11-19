@@ -10,6 +10,15 @@ from ultralytics.nn.uav_innovations import (
     SSSCRepC3,
     SSSCLite,
     GLRoIDecoder,
+    UAVDenseO2OAugmenter,
+    AuxO2MRTDETRLoss,
+    SAFDRDecoder,
+    AWLSDDistillLoss,
+    TOLFDecoder,
+    TOLFUncertaintyLoss,
+    DySample2x,
+    HWDDownsample,
+    SMAIFI,
 )
 # <<< [UAV_PAPER_INNOVATIONS_END] <<<
 # Ultralytics YOLO 🚀, AGPL-3.0 license
@@ -1036,11 +1045,16 @@ def parse_model(d, ch, verbose=True, warehouse_manager=None):  # model_dict, inp
                 c2 = make_divisible(min(c2, max_channels) * width, 8)
             args = [c1, c2, n, *args[1:]]
             n = 1
-        elif m in (SSSCLite, DMBABlock):
+        elif m in (SSSCLite, DMBABlock, DySample2x, SMAIFI):
             c1 = ch[f]
             c2 = c1
             args = [c1, *args]
-        elif m in (UADCRDecoder, GLRoIDecoder):
+        elif m is HWDDownsample:
+            c1, c2 = ch[f], args[0]
+            if c2 != nc:
+                c2 = make_divisible(min(c2, max_channels) * width, 8)
+            args = [c1, c2, *args[1:]]
+        elif m in (UADCRDecoder, GLRoIDecoder, SAFDRDecoder, TOLFDecoder):
             args.insert(1, [ch[x] for x in f])
         # <<< [UAV_PAPER_INNOVATIONS_END] <<<
         elif m in (RTDETRDecoder, UAVResearchDecoder, TinyUAVDecoder):  # special case, channels arg must be passed in index 1
@@ -1499,23 +1513,82 @@ def _uav_init_criterion(self):
             lambda_lsd=float(inno4_cfg.get("lambda_lsd", 0.50)),
             enabled=True,
         )
-    return _ORIG_RTDETR_INIT_CRITERION(self)
+
+    base_crit = _ORIG_RTDETR_INIT_CRITERION(self)
+    inno8_cfg = yaml_cfg.get("innovation_8", {})
+    if isinstance(inno8_cfg, dict) and inno8_cfg.get("enabled", False):
+        return AuxO2MRTDETRLoss(
+            base_criterion=base_crit,
+            nc=self.nc,
+            topk_o2m=int(inno8_cfg.get("topk_o2m", 3)),
+            o2m_weight=float(inno8_cfg.get("o2m_weight", 0.25)),
+            mal_gamma=float(inno8_cfg.get("mal_gamma", 1.5)),
+            enabled=True,
+        )
+    return base_crit
 
 
 def _uav_loss(self, batch, preds=None):
+    yaml_cfg = getattr(self, "yaml", {}) or {}
+
+    # Innovation 8: In-batch UAV-Dense-O2O soft Copy-Paste before forward when preds is None
+    inno8_cfg = yaml_cfg.get("innovation_8", {})
+    if self.training and preds is None and isinstance(inno8_cfg, dict) and inno8_cfg.get("enabled", False):
+        if not hasattr(self, "_uav_dense_o2o_aug"):
+            self._uav_dense_o2o_aug = UAVDenseO2OAugmenter(
+                max_paste_per_img=int(inno8_cfg.get("max_paste_per_img", 3)),
+                prob=float(inno8_cfg.get("paste_prob", 0.75)),
+                max_obj_area=float(inno8_cfg.get("max_obj_area", 0.04)),
+                enabled=True,
+            )
+        self._uav_dense_o2o_aug.train(self.training)
+        batch = self._uav_dense_o2o_aug(batch)
+
     total_loss, loss_items = _ORIG_RTDETR_LOSS(self, batch, preds=preds)
+
     if self.training:
         for m in self.model:
+            # Innovation 1: WCASFP shallow ellipse aux loss + graph cache cleanup (0169ae7)
             if isinstance(m, WCASFP) and m.enabled and m.last_obj_logits is not None:
                 if not hasattr(self, "_shallow_aux_criterion"):
-                    yaml_cfg = getattr(self, "yaml", {}) or {}
                     inno1_cfg = yaml_cfg.get("innovation_1", {})
                     w = float(inno1_cfg.get("aux_shallow_loss_weight", 0.25)) if isinstance(inno1_cfg, dict) else 0.25
                     self._shallow_aux_criterion = ShallowEllipseAuxLoss(loss_weight=w)
-                aux_s_loss = self._shallow_aux_criterion(m.last_obj_logits, batch)
-                total_loss = total_loss + aux_s_loss
+                total_loss = total_loss + self._shallow_aux_criterion(m.last_obj_logits, batch)
                 m.last_obj_logits = None
                 m.last_obj_map = None
+
+            # Innovation 9: SAFDRDecoder Area-Weighted LSD aux loss + graph cache cleanup
+            if isinstance(m, SAFDRDecoder) and m.enabled and m.last_fdr_logits is not None:
+                if not hasattr(self, "_awlsd_criterion"):
+                    inno9_cfg = yaml_cfg.get("innovation_9", {})
+                    self._awlsd_criterion = AWLSDDistillLoss(
+                        temperature=float(inno9_cfg.get("awlsd_temp", 2.0)) if isinstance(inno9_cfg, dict) else 2.0,
+                        tau_area=float(inno9_cfg.get("tau_area", 0.015)) if isinstance(inno9_cfg, dict) else 0.015,
+                        loss_weight=float(inno9_cfg.get("awlsd_weight", 0.35)) if isinstance(inno9_cfg, dict) else 0.35,
+                        enabled=True,
+                    )
+                total_loss = total_loss + self._awlsd_criterion(
+                    m.last_fdr_logits, m.last_fdr_final_boxes, m.last_fdr_final_scores
+                )
+                m.last_fdr_logits = None
+                m.last_fdr_final_boxes = None
+                m.last_fdr_final_scores = None
+
+            # Innovation 10: TOLFDecoder Noise-Robust Uncertainty NLL aux loss + graph cache cleanup
+            if isinstance(m, TOLFDecoder) and m.enabled and m.last_tolf_logvars is not None:
+                if not hasattr(self, "_tolf_criterion"):
+                    inno10_cfg = yaml_cfg.get("innovation_10", {})
+                    self._tolf_criterion = TOLFUncertaintyLoss(
+                        loss_weight=float(inno10_cfg.get("tolf_weight", 0.25)) if isinstance(inno10_cfg, dict) else 0.25,
+                        tau_area=float(inno10_cfg.get("tau_area", 0.015)) if isinstance(inno10_cfg, dict) else 0.015,
+                        enabled=True,
+                    )
+                total_loss = total_loss + self._tolf_criterion(
+                    m.last_tolf_logvars, m.last_tolf_bboxes, batch, num_dn=m.last_tolf_num_dn
+                )
+                m.last_tolf_logvars = None
+                m.last_tolf_bboxes = None
     return total_loss, loss_items
 
 

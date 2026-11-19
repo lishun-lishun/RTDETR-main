@@ -1,5 +1,18 @@
 # RT-DETR 无人机小目标检测：前沿论文驱动的创新研究与可拆卸代码交付包
 
+## E11–E15 升级说明（2026-11-19）
+
+本仓库新增 E11–E15 五组独立 YAML，并保留已有 E0–E10 与 E4 分类损失缩放修复。下文较早的目录清单和训练示例主要描述 E0–E7；请以当前代码为准。当前 Windows 环境未安装 PyTorch，新增模块只完成了静态检查和训练参数 Dry Run，GPU 冒烟测试与性能指标尚未验证。
+
+```bash
+python RTDETR_UAV_Paper_Innovations/integration/install.py --repo . --dry-run
+python RTDETR_UAV_Paper_Innovations/integration/install.py --repo .
+python RTDETR_UAV_Paper_Innovations/integration/smoke_test_8_to_12.py --repo . --device cuda --size 128
+python RTDETR_UAV_Paper_Innovations/experiments/train.py --exp E11 --batch 8 --micro-batch 8 --epochs 150 --seed 0 --device 0 --dry-run
+```
+
+训练须显式加 `--execute`。新协议使用 `runs/uav_paper_ablation_v2`，与已有结果隔离；E0、E4、E11–E15 都须按同一协议重新训练后才能比较。默认从 `weights/rtdetr-r18.pt` 迁移权重，若服务器路径不同，统一使用 `--weights` 指定。仓库的 AMP 检查在缺少 `ultralytics/assets/bus.jpg` 时会跳过图片自检，不必生成随机占位图。
+
 ## 1. 项目概述与交付目标
 
 本交付包针对基于 **Ultralytics YOLOv8.0.201** 修改的 [`RT-DETR-R18`](https://github.com/lishun-lishun/RTDETR-main) 无人机可见光小目标检测工程（数据集：[**DUT-Anti-UAV**](https://github.com/wangdongdut/DUT-Anti-UAV)，640×640 单类别 `UAV` 检测，测试集 2,200 张图像 / 2,245 个目标实例），在对历史消融分支（`codex/uav-research-integration`）失败原因进行深度审计、并系统调研 2024—2026 年 22 篇代表性顶会/顶刊论文的基础上，提出并实现了 **一套面向高水平学术论文的“四阶段全链路协同创新框架”（Four-Stage Synergistic Framework for Anti-UAV Tiny Object Detection）**。

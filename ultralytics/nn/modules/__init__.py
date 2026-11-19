@@ -77,5 +77,10 @@ from ultralytics.nn.uav_innovations import (
     SSSCRepC3,
     SSSCLite,
     GLRoIDecoder,
+    SAFDRDecoder,
+    TOLFDecoder,
+    DySample2x,
+    HWDDownsample,
+    SMAIFI,
 )
 # <<< [UAV_PAPER_INNOVATIONS_END] <<<

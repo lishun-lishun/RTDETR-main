@@ -1,23 +1,24 @@
 #!/usr/bin/env python3
 # -*- coding: utf-8 -*-
 """
-Idempotent Installer for RT-DETR UAV Paper Innovations (Innovations 1–7)
-========================================================================
+Idempotent Installer for RT-DETR UAV Paper Innovations (Innovations 1–12)
+=========================================================================
 Aligned with `https://github.com/lishun-lishun/RTDETR-main/tree/codex/uav-research-integration`
-(including commits `6e9274d`, `7b472a9`, `4d7e695`, `de559ef`, `2415a23`, `0169ae7`).
+(commits `6e9274d`, `7b472a9`, `4d7e695`, `de559ef`, `2415a23`, `0169ae7`).
 
-Key Safety & Upgrade Guarantees:
-1. In-Place Upgrade & Idempotent:
-   Whether `RTDETR-main` already has Innovations 1–4 installed (with existing
-   `# >>> [UAV_PAPER_INNOVATIONS_BEGIN] >>>` blocks) or is a fresh branch, running
-   `python RTDETR_UAV_Paper_Innovations/integration/install.py --repo .` cleanly
-   upgrades the sentinel blocks in-place to support all 7 innovations (1–7), and
-   running it multiple times produces byte-for-byte identical files.
-2. Strictly Independent Innovations 5, 6, 7 on Original `rtdetr-r18.yaml`:
-   - `rtdetr-r18-inno5-dmba.yaml`: ONLY Innovation 5 (`DMBARepC3` on Layers 19 & 22)
-   - `rtdetr-r18-inno6-sssc.yaml`: ONLY Innovation 6 (`SSSCRepC3` on Layers 19 & 22)
-   - `rtdetr-r18-inno7-glroi.yaml`: ONLY Innovation 7 (`GLRoIDecoder` on Layer 26)
-   Never overwrites original `rtdetr-r18.yaml`.
+Supports seamless in-place upgrade from Innovations 1–4 or 1–7 to Innovations 1–12:
+  - Innovation 1:  WCASFP + ShallowEllipseAuxLoss (synced with 2415a23 & 0169ae7)
+  - Innovation 2:  FAGAFusion
+  - Innovation 3:  UADCRDecoder
+  - Innovation 4:  SAHNWDRTDETRLoss (FIXED 300x `* nq` cls_loss scaling bug!)
+  - Innovation 5:  DMBARepC3 / DMBABlock (standalone on original rtdetr-r18)
+  - Innovation 6:  SSSCRepC3 / SSSCLite (standalone on original rtdetr-r18)
+  - Innovation 7:  GLRoIDecoder / P2RoIReSampler (standalone on original rtdetr-r18)
+  - Innovation 8:  UAVDenseO2OAugmenter + AuxO2MRTDETRLoss (standalone train-time-only on original rtdetr-r18)
+  - Innovation 9:  SAFDRDecoder + AWLSDDistillLoss (standalone on original rtdetr-r18)
+  - Innovation 10: TOLFDecoder + TOLFUncertaintyLoss (standalone on original rtdetr-r18)
+  - Innovation 11: DySample2x + HWDDownsample (standalone on original rtdetr-r18)
+  - Innovation 12: SMAIFI (standalone on original rtdetr-r18)
 """
 
 from __future__ import annotations
@@ -32,7 +33,6 @@ SENTINEL_END = "# <<< [UAV_PAPER_INNOVATIONS_END] <<<"
 
 
 def _strip_existing_sentinels(text: str) -> str:
-    """Removes any existing sentinel-guarded blocks so we can cleanly re-inject the latest version."""
     pattern = re.compile(
         rf"[ \t]*{re.escape(SENTINEL_BEGIN)}.*?{re.escape(SENTINEL_END)}[ \t]*\n?",
         flags=re.DOTALL,
@@ -41,12 +41,11 @@ def _strip_existing_sentinels(text: str) -> str:
 
 
 def copy_innovation_packages(pkg_root: Path, repo_root: Path) -> None:
-    """Copies innovation_1..7 into `ultralytics/nn/uav_innovations/` and copies YAML configs."""
     target_pkg = repo_root / "ultralytics" / "nn" / "uav_innovations"
     target_pkg.mkdir(parents=True, exist_ok=True)
 
     init_code = '''# -*- coding: utf-8 -*-
-"""RT-DETR UAV Small-Object Detection Paper Innovations Package (Innovations 1–7)."""
+"""RT-DETR UAV Small-Object Detection Paper Innovations Package (Innovations 1–12)."""
 from .innovation_1 import WCASFP, ShallowEllipseAuxLoss, HaarWaveletTransform2D, CenterSurroundContrast
 from .innovation_2 import FAGAFusion
 from .innovation_3 import UADCRDecoder, VarianceFlooredMSDeformAttn, UADDeformableDecoderLayer, UADDeformableDecoder
@@ -54,6 +53,11 @@ from .innovation_4 import SAHNWDRTDETRLoss, ScaleAdaptiveHungarianMatcher, norma
 from .innovation_5 import DMBARepC3, DMBABlock
 from .innovation_6 import SSSCRepC3, SSSCLite
 from .innovation_7 import GLRoIDecoder, P2RoIReSampler
+from .innovation_8 import UAVDenseO2OAugmenter, AuxO2MRTDETRLoss
+from .innovation_9 import SAFDRDecoder, AWLSDDistillLoss
+from .innovation_10 import TOLFDecoder, TOLFUncertaintyLoss
+from .innovation_11 import DySample2x, HWDDownsample
+from .innovation_12 import SMAIFI
 
 __all__ = [
     "WCASFP",
@@ -74,37 +78,38 @@ __all__ = [
     "SSSCLite",
     "GLRoIDecoder",
     "P2RoIReSampler",
+    "UAVDenseO2OAugmenter",
+    "AuxO2MRTDETRLoss",
+    "SAFDRDecoder",
+    "AWLSDDistillLoss",
+    "TOLFDecoder",
+    "TOLFUncertaintyLoss",
+    "DySample2x",
+    "HWDDownsample",
+    "SMAIFI",
 ]
 '''
     (target_pkg / "__init__.py").write_text(init_code, encoding="utf-8")
 
-    for i in range(1, 8):
+    for i in range(1, 13):
         src_mod = pkg_root / f"innovation_{i}" / "module.py"
         if src_mod.exists():
             dst_mod = target_pkg / f"innovation_{i}.py"
+            # An upgrade must preserve fixes already made to installed modules 1–7.
+            if i <= 7 and dst_mod.exists():
+                continue
             shutil.copy2(src_mod, dst_mod)
 
-    # Fix internal cross-imports inside installed `ultralytics/nn/uav_innovations/` so they work both
-    # as `ultralytics.nn.uav_innovations.innovation_X` and as `RTDETR_UAV_Paper_Innovations.innovation_X.module`
-    inno6_dst = target_pkg / "innovation_6.py"
-    if inno6_dst.exists():
-        txt6 = inno6_dst.read_text(encoding="utf-8")
-        txt6 = txt6.replace(
-            "from RTDETR_UAV_Paper_Innovations.innovation_5.module import _StdConvNormAct, _RepConvBlock",
-            "from .innovation_5 import _StdConvNormAct, _RepConvBlock",
-        )
-        inno6_dst.write_text(txt6, encoding="utf-8")
+    # Convert cross-innovation imports to relative package imports inside `ultralytics/nn/uav_innovations/`
+    for fname in ["innovation_6.py", "innovation_7.py", "innovation_9.py", "innovation_10.py"]:
+        fpath = target_pkg / fname
+        if fpath.exists():
+            txt = fpath.read_text(encoding="utf-8")
+            txt = txt.replace("from RTDETR_UAV_Paper_Innovations.innovation_5.module import", "from .innovation_5 import")
+            txt = txt.replace("from RTDETR_UAV_Paper_Innovations.innovation_3.module import", "from .innovation_3 import")
+            fpath.write_text(txt, encoding="utf-8")
 
-    inno7_dst = target_pkg / "innovation_7.py"
-    if inno7_dst.exists():
-        txt7 = inno7_dst.read_text(encoding="utf-8")
-        txt7 = txt7.replace(
-            "from RTDETR_UAV_Paper_Innovations.innovation_3.module import",
-            "from .innovation_3 import",
-        )
-        inno7_dst.write_text(txt7, encoding="utf-8")
-
-    # Copy model YAML configs into ultralytics/cfg/models/rt-detr/
+    # Copy model YAML configs into ultralytics/cfg/models/rt-detr/ (never overwrite original rtdetr-r18.yaml)
     cfg_dir = repo_root / "ultralytics" / "cfg" / "models" / "rt-detr"
     cfg_dir.mkdir(parents=True, exist_ok=True)
     model_cfgs_src = pkg_root / "integration" / "model_configs"
@@ -117,7 +122,6 @@ __all__ = [
 
 
 def patch_modules_init(repo_root: Path, backup_dir: Path) -> bool:
-    """Registers Innovations 1–7 in ultralytics/nn/modules/__init__.py."""
     init_file = repo_root / "ultralytics" / "nn" / "modules" / "__init__.py"
     if not init_file.exists():
         print(f"[WARN] {init_file} not found, skipping.")
@@ -141,6 +145,11 @@ from ultralytics.nn.uav_innovations import (
     SSSCRepC3,
     SSSCLite,
     GLRoIDecoder,
+    SAFDRDecoder,
+    TOLFDecoder,
+    DySample2x,
+    HWDDownsample,
+    SMAIFI,
 )
 {SENTINEL_END}
 """
@@ -150,14 +159,6 @@ from ultralytics.nn.uav_innovations import (
 
 
 def patch_tasks_py(repo_root: Path, backup_dir: Path) -> bool:
-    """
-    Patches `ultralytics/nn/tasks.py` idempotently (supports upgrading from Innovations 1–4 to 1–7):
-    1. Imports WCASFP, ShallowEllipseAuxLoss, FAGAFusion, UADCRDecoder, SAHNWDRTDETRLoss,
-       DMBARepC3, DMBABlock, SSSCRepC3, SSSCLite, GLRoIDecoder
-    2. Ensures `self.nc = self.yaml['nc']` in `RTDETRDetectionModel.__init__` (commit 4d7e695)
-    3. Registers WCASFP, FAGAFusion, UADCRDecoder, DMBARepC3, SSSCRepC3, SSSCLite, GLRoIDecoder in `parse_model`
-    4. Appends `_uav_init_criterion` & `_uav_loss` (with `m.last_obj_map = None` from commit 0169ae7)
-    """
     tasks_file = repo_root / "ultralytics" / "nn" / "tasks.py"
     if not tasks_file.exists():
         print(f"[WARN] {tasks_file} not found, skipping.")
@@ -172,7 +173,7 @@ def patch_tasks_py(repo_root: Path, backup_dir: Path) -> bool:
 
     content = _strip_existing_sentinels(raw_content).lstrip()
 
-    # Ensure `self.nc = self.yaml['nc']` is present in RTDETRDetectionModel.__init__ (commit 4d7e695)
+    # Ensure `self.nc = self.yaml['nc']` in RTDETRDetectionModel.__init__ (commit 4d7e695)
     rtdetr_super = "super().__init__(cfg=cfg, ch=ch, nc=nc, verbose=verbose)"
     if rtdetr_super in content and "self.nc = self.yaml['nc']" not in content:
         content = content.replace(
@@ -181,7 +182,6 @@ def patch_tasks_py(repo_root: Path, backup_dir: Path) -> bool:
             1,
         )
 
-    # 1. Top import block
     import_snippet = f"""{SENTINEL_BEGIN}
 from ultralytics.nn.uav_innovations import (
     WCASFP,
@@ -194,11 +194,19 @@ from ultralytics.nn.uav_innovations import (
     SSSCRepC3,
     SSSCLite,
     GLRoIDecoder,
+    UAVDenseO2OAugmenter,
+    AuxO2MRTDETRLoss,
+    SAFDRDecoder,
+    AWLSDDistillLoss,
+    TOLFDecoder,
+    TOLFUncertaintyLoss,
+    DySample2x,
+    HWDDownsample,
+    SMAIFI,
 )
 {SENTINEL_END}
 """
 
-    # 2. Inject parse_model support right before RTDETRDecoder branch
     parse_block = f"""        {SENTINEL_BEGIN}
         elif m is WCASFP:
             c1 = [ch[x] for x in f] if isinstance(f, list) else ch[f]
@@ -214,11 +222,16 @@ from ultralytics.nn.uav_innovations import (
                 c2 = make_divisible(min(c2, max_channels) * width, 8)
             args = [c1, c2, n, *args[1:]]
             n = 1
-        elif m in (SSSCLite, DMBABlock):
+        elif m in (SSSCLite, DMBABlock, DySample2x, SMAIFI):
             c1 = ch[f]
             c2 = c1
             args = [c1, *args]
-        elif m in (UADCRDecoder, GLRoIDecoder):
+        elif m is HWDDownsample:
+            c1, c2 = ch[f], args[0]
+            if c2 != nc:
+                c2 = make_divisible(min(c2, max_channels) * width, 8)
+            args = [c1, c2, *args[1:]]
+        elif m in (UADCRDecoder, GLRoIDecoder, SAFDRDecoder, TOLFDecoder):
             args.insert(1, [ch[x] for x in f])
         {SENTINEL_END}"""
 
@@ -228,8 +241,9 @@ from ultralytics.nn.uav_innovations import (
         content = content.replace(target_branch_a, parse_block + "\n" + target_branch_a, 1)
     elif target_branch_b in content:
         content = content.replace(target_branch_b, parse_block + "\n" + target_branch_b, 1)
+    else:
+        raise RuntimeError("Cannot find RT-DETR parse_model branch; refusing to write tasks.py")
 
-    # 3. Runtime hook at end of tasks.py (preserving 0169ae7 cache cleanup)
     runtime_hook = f"""
 {SENTINEL_BEGIN}
 _ORIG_RTDETR_INIT_CRITERION = RTDETRDetectionModel.init_criterion
@@ -255,23 +269,82 @@ def _uav_init_criterion(self):
             lambda_lsd=float(inno4_cfg.get("lambda_lsd", 0.50)),
             enabled=True,
         )
-    return _ORIG_RTDETR_INIT_CRITERION(self)
+
+    base_crit = _ORIG_RTDETR_INIT_CRITERION(self)
+    inno8_cfg = yaml_cfg.get("innovation_8", {{}})
+    if isinstance(inno8_cfg, dict) and inno8_cfg.get("enabled", False):
+        return AuxO2MRTDETRLoss(
+            base_criterion=base_crit,
+            nc=self.nc,
+            topk_o2m=int(inno8_cfg.get("topk_o2m", 3)),
+            o2m_weight=float(inno8_cfg.get("o2m_weight", 0.25)),
+            mal_gamma=float(inno8_cfg.get("mal_gamma", 1.5)),
+            enabled=True,
+        )
+    return base_crit
 
 
 def _uav_loss(self, batch, preds=None):
+    yaml_cfg = getattr(self, "yaml", {{}}) or {{}}
+
+    # Innovation 8: In-batch UAV-Dense-O2O soft Copy-Paste before forward when preds is None
+    inno8_cfg = yaml_cfg.get("innovation_8", {{}})
+    if self.training and preds is None and isinstance(inno8_cfg, dict) and inno8_cfg.get("enabled", False):
+        if not hasattr(self, "_uav_dense_o2o_aug"):
+            self._uav_dense_o2o_aug = UAVDenseO2OAugmenter(
+                max_paste_per_img=int(inno8_cfg.get("max_paste_per_img", 3)),
+                prob=float(inno8_cfg.get("paste_prob", 0.75)),
+                max_obj_area=float(inno8_cfg.get("max_obj_area", 0.04)),
+                enabled=True,
+            )
+        self._uav_dense_o2o_aug.train(self.training)
+        batch = self._uav_dense_o2o_aug(batch)
+
     total_loss, loss_items = _ORIG_RTDETR_LOSS(self, batch, preds=preds)
+
     if self.training:
         for m in self.model:
+            # Innovation 1: WCASFP shallow ellipse aux loss + graph cache cleanup (0169ae7)
             if isinstance(m, WCASFP) and m.enabled and m.last_obj_logits is not None:
                 if not hasattr(self, "_shallow_aux_criterion"):
-                    yaml_cfg = getattr(self, "yaml", {{}}) or {{}}
                     inno1_cfg = yaml_cfg.get("innovation_1", {{}})
                     w = float(inno1_cfg.get("aux_shallow_loss_weight", 0.25)) if isinstance(inno1_cfg, dict) else 0.25
                     self._shallow_aux_criterion = ShallowEllipseAuxLoss(loss_weight=w)
-                aux_s_loss = self._shallow_aux_criterion(m.last_obj_logits, batch)
-                total_loss = total_loss + aux_s_loss
+                total_loss = total_loss + self._shallow_aux_criterion(m.last_obj_logits, batch)
                 m.last_obj_logits = None
                 m.last_obj_map = None
+
+            # Innovation 9: SAFDRDecoder Area-Weighted LSD aux loss + graph cache cleanup
+            if isinstance(m, SAFDRDecoder) and m.enabled and m.last_fdr_logits is not None:
+                if not hasattr(self, "_awlsd_criterion"):
+                    inno9_cfg = yaml_cfg.get("innovation_9", {{}})
+                    self._awlsd_criterion = AWLSDDistillLoss(
+                        temperature=float(inno9_cfg.get("awlsd_temp", 2.0)) if isinstance(inno9_cfg, dict) else 2.0,
+                        tau_area=float(inno9_cfg.get("tau_area", 0.015)) if isinstance(inno9_cfg, dict) else 0.015,
+                        loss_weight=float(inno9_cfg.get("awlsd_weight", 0.35)) if isinstance(inno9_cfg, dict) else 0.35,
+                        enabled=True,
+                    )
+                total_loss = total_loss + self._awlsd_criterion(
+                    m.last_fdr_logits, m.last_fdr_final_boxes, m.last_fdr_final_scores
+                )
+                m.last_fdr_logits = None
+                m.last_fdr_final_boxes = None
+                m.last_fdr_final_scores = None
+
+            # Innovation 10: TOLFDecoder Noise-Robust Uncertainty NLL aux loss + graph cache cleanup
+            if isinstance(m, TOLFDecoder) and m.enabled and m.last_tolf_logvars is not None:
+                if not hasattr(self, "_tolf_criterion"):
+                    inno10_cfg = yaml_cfg.get("innovation_10", {{}})
+                    self._tolf_criterion = TOLFUncertaintyLoss(
+                        loss_weight=float(inno10_cfg.get("tolf_weight", 0.25)) if isinstance(inno10_cfg, dict) else 0.25,
+                        tau_area=float(inno10_cfg.get("tau_area", 0.015)) if isinstance(inno10_cfg, dict) else 0.015,
+                        enabled=True,
+                    )
+                total_loss = total_loss + self._tolf_criterion(
+                    m.last_tolf_logvars, m.last_tolf_bboxes, batch, num_dn=m.last_tolf_num_dn
+                )
+                m.last_tolf_logvars = None
+                m.last_tolf_bboxes = None
     return total_loss, loss_items
 
 
@@ -285,12 +358,15 @@ RTDETRDetectionModel.loss = _uav_loss
     return True
 
 
-def install(repo_path: str) -> int:
+def install(repo_path: str, dry_run: bool = False) -> int:
     pkg_root = Path(__file__).resolve().parent.parent
     repo_root = Path(repo_path).resolve()
     if not (repo_root / "ultralytics").exists():
         print(f"[ERROR] {repo_root}/ultralytics does not exist. Please pass valid RTDETR-main path.")
         return 1
+    if dry_run:
+        print(f"[DRY RUN] Would install new modules and YAMLs into {repo_root}, then patch two registration files")
+        return 0
 
     backup_dir = repo_root / ".uav_paper_backup"
     backup_dir.mkdir(parents=True, exist_ok=True)
@@ -298,15 +374,16 @@ def install(repo_path: str) -> int:
     copy_innovation_packages(pkg_root, repo_root)
     patch_modules_init(repo_root, backup_dir)
     patch_tasks_py(repo_root, backup_dir)
-    print(f"[SUCCESS] All 7 UAV Paper Innovations (1–7) installed into {repo_root}")
+    print(f"[SUCCESS] All 12 UAV Paper Innovations (1–12) installed into {repo_root}")
     return 0
 
 
 def main():
-    parser = argparse.ArgumentParser(description="Install RT-DETR UAV Paper Innovations (1–7)")
+    parser = argparse.ArgumentParser(description="Install RT-DETR UAV Paper Innovations (1–12)")
     parser.add_argument("--repo", "--repo-root", type=str, default=".", help="Path to RTDETR-main repository root")
+    parser.add_argument("--dry-run", action="store_true", help="Preview without changing files")
     args = parser.parse_args()
-    sys.exit(install(args.repo))
+    sys.exit(install(args.repo, dry_run=args.dry_run))
 
 
 if __name__ == "__main__":
