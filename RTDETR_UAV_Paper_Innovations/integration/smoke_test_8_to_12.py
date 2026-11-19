@@ -37,21 +37,23 @@ CONFIGS_8_TO_12 = [
 
 def _make_batch(bs: int, num_gt: int, device: torch.device, size: int) -> dict:
     img = torch.rand(bs, 3, size, size, device=device)
+    # Match the real trainer: it moves images to CUDA and keeps labels on CPU.
+    label_device = torch.device("cpu")
     if num_gt == 0:
         return {
             "img": img,
-            "batch_idx": torch.zeros((0,), dtype=torch.long, device=device),
-            "cls": torch.zeros((0, 1), dtype=torch.float32, device=device),
-            "bboxes": torch.zeros((0, 4), dtype=torch.float32, device=device),
+            "batch_idx": torch.zeros((0,), dtype=torch.long, device=label_device),
+            "cls": torch.zeros((0, 1), dtype=torch.float32, device=label_device),
+            "bboxes": torch.zeros((0, 4), dtype=torch.float32, device=label_device),
         }
-    batch_idx = torch.tensor([i % bs for i in range(num_gt)], dtype=torch.long, device=device)
-    cls = torch.zeros((num_gt, 1), dtype=torch.float32, device=device)
+    batch_idx = torch.tensor([i * bs // num_gt for i in range(num_gt)], dtype=torch.long, device=label_device)
+    cls = torch.zeros((num_gt, 1), dtype=torch.float32, device=label_device)
     tiny = max(0.012, 5.0 / size)
     bboxes = torch.tensor(
         [[0.50, 0.50, tiny, tiny], [0.32, 0.44, tiny * 1.3, tiny],
          [0.71, 0.28, tiny * 1.6, tiny * 1.2]][:num_gt],
         dtype=torch.float32,
-        device=device,
+        device=label_device,
     )
     return {"img": img, "batch_idx": batch_idx, "cls": cls, "bboxes": bboxes}
 
@@ -79,6 +81,8 @@ def run_smoke(repo_root: Path, device_str: str = "cuda", size: int = 128, config
                 print(f"[SMOKE] cfg={cfg_name} | device={device.type} | amp={amp} | gt={num_gt}")
                 model = RTDETRDetectionModel(cfg=str(cfg_path), ch=3, nc=1, verbose=False).to(device)
                 model.train()
+                if cfg_name == "rtdetr-r18-inno8-denseo2o.yaml":
+                    model.yaml["innovation_8"]["paste_prob"] = 1.0  # exercise CPU-label Copy-Paste path
                 batch = _make_batch(bs=2, num_gt=num_gt, device=device, size=size)
                 model.zero_grad(set_to_none=True)
 

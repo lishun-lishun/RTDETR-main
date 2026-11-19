@@ -89,6 +89,11 @@ class UAVDenseO2OAugmenter(nn.Module):
 
         bs, c, h, w = img.shape
         device = img.device
+        # The RT-DETR trainer moves images to CUDA in preprocess_batch but
+        # leaves detection labels on CPU. All augmentation indexing uses CUDA.
+        bboxes = bboxes.to(device=device, non_blocking=True)
+        cls = cls.to(device=device, non_blocking=True)
+        batch_idx = batch_idx.to(device=device, non_blocking=True).view(-1)
 
         # Collect donor pool of small/medium UAV crops from the current mini-batch
         areas = bboxes[:, 2] * bboxes[:, 3]
