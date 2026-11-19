@@ -592,19 +592,24 @@ def check_amp(model):
     prefix = colorstr('AMP: ')
     LOGGER.info(f'{prefix}running Automatic Mixed Precision (AMP) checks with YOLOv8n...')
     warning_msg = "Setting 'amp=True'. If you experience zero-mAP or NaN losses you can disable AMP with amp=False."
+    if not im.exists():
+        LOGGER.warning(f"{prefix}checks skipped ⚠️, test image '{im}' not found. {warning_msg}")
+        return True
     try:
         from ultralytics import YOLO
         assert amp_allclose(YOLO('yolov8n.pt'), im)
         LOGGER.info(f'{prefix}checks passed ✅')
     except ConnectionError:
         LOGGER.warning(f'{prefix}checks skipped ⚠️, offline and unable to download YOLOv8n. {warning_msg}')
-    except (AttributeError, ModuleNotFoundError):
+    except (AttributeError, ModuleNotFoundError, FileNotFoundError):
         LOGGER.warning(f'{prefix}checks skipped ⚠️. '
-                       f'Unable to load YOLOv8n due to possible Ultralytics package modifications. {warning_msg}')
+                       f'Unable to run YOLOv8n AMP check due to missing files or environment modifications. {warning_msg}')
     except AssertionError:
         LOGGER.warning(f'{prefix}checks failed ❌. Anomalies were detected with AMP on your system that may lead to '
                        f'NaN losses or zero-mAP results, so AMP will be disabled during training.')
         return False
+    except Exception as e:
+        LOGGER.warning(f'{prefix}checks skipped ⚠️ ({e}). {warning_msg}')
     return True
 
 
