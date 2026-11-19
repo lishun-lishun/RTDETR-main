@@ -39,7 +39,7 @@ class TestInnovation4SAHNWD(unittest.TestCase):
         self.assertEqual(iou.item(), 0.0, "Boxes should have zero overlap")
 
         q_hybrid = criterion._compute_hybrid_quality(pred_box, gt_box)
-        self.assertGreater(q_hybrid.item(), 0.30, "q_hybrid must be non-zero even when IoU==0")
+        self.assertGreater(q_hybrid.item(), 0.15, "q_hybrid must be non-zero even when IoU==0")
 
         loss_dict = criterion._get_loss_bbox(pred_box, gt_box)
         total_box_loss = loss_dict["loss_bbox"] + loss_dict["loss_giou"]

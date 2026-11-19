@@ -342,18 +342,18 @@ class SAHNWDRTDETRLoss(nn.Module):
                     # Positive weight: q_hybrid, Negative weight: 0.75 * p^gamma
                     weight = gt_scores_3d * one_hot + 0.75 * prob.pow(2.0) * (1.0 - one_hot)
                     bce = F.binary_cross_entropy_with_logits(pred_fp32, gt_scores_3d, reduction="none")
-                    loss_cls = (bce * weight).mean(1).sum() / max(num_gts, 1)
+                    loss_cls = (bce * weight).mean(1).sum() * nq / max(num_gts, 1)
                 else:
                     # Standard Ultralytics VarifocalLoss
                     weight = gt_scores_3d * one_hot + 0.75 * prob.pow(2.0) * (1.0 - one_hot)
                     bce = F.binary_cross_entropy_with_logits(pred_fp32, gt_scores_3d, reduction="none")
-                    loss_cls = (bce * weight).mean(1).sum() / max(num_gts, 1)
+                    loss_cls = (bce * weight).mean(1).sum() * nq / max(num_gts, 1)
             else:
                 # Standard Focal Loss when num_gts == 0
                 pt = prob * one_hot + (1.0 - prob) * (1.0 - one_hot)
                 alpha_t = 0.25 * one_hot + 0.75 * (1.0 - one_hot)
                 bce = F.binary_cross_entropy_with_logits(pred_fp32, one_hot, reduction="none")
-                loss_cls = (alpha_t * ((1.0 - pt) ** 2.0) * bce).mean(1).sum() / max(num_gts, 1)
+                loss_cls = (alpha_t * ((1.0 - pt) ** 2.0) * bce).mean(1).sum() * nq / max(num_gts, 1)
         else:
             loss_cls = F.binary_cross_entropy_with_logits(pred_fp32, gt_scores_3d, reduction="none").mean(1).sum()
 
