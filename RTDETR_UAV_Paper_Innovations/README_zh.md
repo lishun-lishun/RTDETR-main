@@ -11,7 +11,7 @@ python RTDETR_UAV_Paper_Innovations/integration/smoke_test_8_to_12.py --repo . -
 python RTDETR_UAV_Paper_Innovations/experiments/train.py --exp E11 --batch 8 --micro-batch 8 --epochs 150 --seed 0 --device 0 --dry-run
 ```
 
-训练须显式加 `--execute`。新协议使用 `runs/uav_paper_ablation_v2`，与已有结果隔离；E0、E4、E11–E15 都须按同一协议重新训练后才能比较。默认从 `weights/rtdetr-r18.pt` 迁移权重，若服务器路径不同，统一使用 `--weights` 指定。仓库的 AMP 检查在缺少 `ultralytics/assets/bus.jpg` 时会跳过图片自检，不必生成随机占位图。
+训练须显式加 `--execute`。新协议使用 `runs/uav_paper_ablation_v2`，与已有结果隔离；E0、E4、E11–E15 都须按同一协议重新训练后才能比较。默认不加载预训练权重，与已记录的历史 E0 初始化方式一致；如需使用 R18 权重，所有对比实验统一通过 `--weights` 指定同一个文件。仓库的 AMP 检查在缺少 `ultralytics/assets/bus.jpg` 时会跳过图片自检，不必生成随机占位图。
 
 ## 1. 项目概述与交付目标
 

@@ -93,7 +93,7 @@ def main():
     parser = argparse.ArgumentParser(description="Fair Training Launcher for RT-DETR UAV Innovations (E0-E15)")
     parser.add_argument("--exp", type=str, required=True, choices=list(EXPERIMENT_MAP.keys()), help="Experiment ID (E0..E15)")
     parser.add_argument("--data", type=str, default="dataset/DUT-Anti-UAV.yaml", help="Dataset YAML path")
-    parser.add_argument("--weights", type=str, default="weights/rtdetr-r18.pt", help="Common R18 initialization checkpoint")
+    parser.add_argument("--weights", type=str, default="", help="Optional common R18 initialization checkpoint")
     parser.add_argument("--epochs", type=int, default=150, help="Fixed training epochs (default: 150)")
     parser.add_argument("--batch", type=int, default=8, help="Effective batch size (default: 8)")
     parser.add_argument("--micro-batch", type=int, default=8, help="Per-step batch size (must equal 8)")
