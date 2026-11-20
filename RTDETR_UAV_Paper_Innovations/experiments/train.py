@@ -95,18 +95,29 @@ def build_fair_train_kwargs(
 
 
 def main():
-    parser = argparse.ArgumentParser(description="Fair Training Launcher for RT-DETR UAV Innovations (E0-E15)")
-    parser.add_argument("--exp", type=str, required=True, choices=list(EXPERIMENT_MAP.keys()), help="Experiment ID (E0..E15)")
-    parser.add_argument("--data", type=str, default="dataset/DUT-Anti-UAV.yaml", help="Dataset YAML path")
-    parser.add_argument("--weights", type=str, default="weights/rtdetr-r18.pt", help="Pretrained R18 checkpoint")
+    parser = argparse.ArgumentParser(description="Fair Training Launcher for RT-DETR UAV Innovations (E0-E15, V2)")
+    default_data = (
+        "dataset/DUT-Anti-UAV.yaml"
+        if (REPO_ROOT / "dataset" / "DUT-Anti-UAV.yaml").is_file()
+        else "ultralytics/cfg/datasets/dut-anti-uav.yaml"
+    )
+    parser.add_argument("--exp", type=str, required=True, choices=list(EXPERIMENT_MAP.keys()), help="Experiment ID (E0..E15, V2_A..V2_FULL)")
+    parser.add_argument("--data", type=str, default=default_data, help="Dataset YAML path")
+    parser.add_argument("--weights", type=str, default="", help="Pretrained checkpoint path; leave empty to train from scratch (default: '')")
     parser.add_argument("--epochs", type=int, default=150, help="Fixed training epochs (default: 150)")
-    parser.add_argument("--batch", type=int, default=16, help="Batch size (default: 16)")
+    parser.add_argument("--batch", type=int, default=8, help="Batch size (default: 8)")
+    parser.add_argument("--micro-batch", type=int, default=None, help="Micro-batch size (default: same as batch)")
     parser.add_argument("--imgsz", type=int, default=640, help="Input image size (default: 640)")
-    parser.add_argument("--device", type=str, default="0", help="CUDA device ID(s)")
+    parser.add_argument("--device", type=str, default="0", help="CUDA device ID(s), e.g. '0' or '0,1'")
     parser.add_argument("--seed", type=int, default=0, help="Random seed")
     parser.add_argument("--project", type=str, default="runs/uav_paper_ablation", help="Output directory root")
+    parser.add_argument("--execute", action="store_true", help="Start training; default is dry-run")
     parser.add_argument("--dry-run", action="store_true", help="Print fair training config without launching GPU run")
     args = parser.parse_args()
+
+    actual_batch = args.batch
+    if args.micro_batch is not None:
+        actual_batch = args.micro_batch
 
     model_yaml = EXPERIMENT_MAP[args.exp]
     if not Path(model_yaml).is_file():
@@ -118,7 +129,7 @@ def main():
         data_yaml=args.data,
         pretrained_weights=args.weights,
         epochs=args.epochs,
-        batch=args.batch,
+        batch=actual_batch,
         imgsz=args.imgsz,
         device=args.device,
         seed=args.seed,
@@ -127,11 +138,15 @@ def main():
 
     print("=" * 80)
     print(f"[RT-DETR UAV Paper Ablation Launcher] Experiment: {args.exp} (Seed: {args.seed})")
+    if args.weights and os.path.exists(args.weights):
+        print(f"[INFO] Using pretrained weights: {args.weights}")
+    else:
+        print("[INFO] Scratch Training Mode: NO pretrained weights will be loaded (pretrained=False).")
     print(json.dumps(train_kwargs, indent=2, ensure_ascii=False))
     print("=" * 80)
 
-    if args.dry_run:
-        print("[DRY-RUN] Verified fair training recipe. Exiting without launching GPU training.")
+    if args.dry_run or not args.execute:
+        print("[DRY-RUN] Verified fair training recipe. Exiting without launching GPU training. Use --execute to start.")
         return
 
     import ultralytics
@@ -144,8 +159,10 @@ def main():
 
     model = RTDETR(model_yaml)
     if args.weights and os.path.exists(args.weights):
-        print(f"[INFO] Loading matching pretrained weights from {args.weights}")
+        print(f"[INFO] Loading pretrained weights from {args.weights}")
         model.load(args.weights)
+    else:
+        print("[INFO] Model initialized from YAML architecture only (training from scratch).")
 
     out_dir = Path(args.project) / f"{args.exp}_seed{args.seed}"
     out_dir.mkdir(parents=True, exist_ok=True)
