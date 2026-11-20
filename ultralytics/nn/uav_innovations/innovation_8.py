@@ -87,8 +87,17 @@ class UAVDenseO2OAugmenter(nn.Module):
         if bboxes.numel() == 0 or img.ndim != 4 or img.shape[0] < 1:
             return batch
 
+        orig_box_device = bboxes.device
+        orig_cls_device = cls.device
+        orig_bidx_device = batch_idx.device
+
         bs, c, h, w = img.shape
         device = img.device
+
+        # Ensure working tensors are on the exact same device as img
+        bboxes = bboxes.to(device)
+        cls = cls.to(device)
+        batch_idx = batch_idx.to(device)
 
         # Collect donor pool of small/medium UAV crops from the current mini-batch
         areas = bboxes[:, 2] * bboxes[:, 3]
@@ -166,9 +175,9 @@ class UAVDenseO2OAugmenter(nn.Module):
 
         out_batch = dict(batch)
         out_batch["img"] = new_img
-        out_batch["bboxes"] = torch.cat([bboxes] + extra_bboxes, dim=0)
-        out_batch["cls"] = torch.cat([cls] + extra_cls, dim=0)
-        out_batch["batch_idx"] = torch.cat([batch_idx] + extra_bidx, dim=0)
+        out_batch["bboxes"] = torch.cat([bboxes] + extra_bboxes, dim=0).to(orig_box_device)
+        out_batch["cls"] = torch.cat([cls] + extra_cls, dim=0).to(orig_cls_device)
+        out_batch["batch_idx"] = torch.cat([batch_idx] + extra_bidx, dim=0).to(orig_bidx_device)
         return out_batch
 
 
@@ -240,8 +249,8 @@ class AuxO2MRTDETRLoss(nn.Module):
             bs, nq, nc = p_logit.shape
             k = min(self.topk_o2m, nq)
 
-            gt_b_splits = gt_bboxes.float().split(gt_groups, dim=0)
-            gt_c_splits = gt_cls.long().split(gt_groups, dim=0)
+            gt_b_splits = gt_bboxes.float().to(device).split(gt_groups, dim=0)
+            gt_c_splits = gt_cls.long().to(device).split(gt_groups, dim=0)
 
             total_box_loss = torch.tensor(0.0, device=device, dtype=torch.float32)
             total_cls_loss = torch.tensor(0.0, device=device, dtype=torch.float32)
