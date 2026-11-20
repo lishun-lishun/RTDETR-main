@@ -88,3 +88,6 @@ from ultralytics.nn.uav_innovations import (
     CAUADDecoder,
 )
 # <<< [UAV_PAPER_INNOVATIONS_END] <<<
+# >>> [RTHRNET_W18_BEGIN] >>>
+from .rt_hrnet import RTHRNetW18, RTHRNetW18Fast, RTHRNetW18Balanced, RepHRBlock, HaarP2FoldTransition
+# <<< [RTHRNET_W18_END] <<<

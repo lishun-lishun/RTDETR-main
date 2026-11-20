@@ -1,0 +1,37 @@
+# Parameters
+nc: 80  # number of classes
+scales:
+  l: [1.00, 1.00, 1024]
+
+# RT-DETR + RT-HRNet-W18-Balanced (Higher-capacity FastRep-HRNet: channels 24/48/96/192, Stage3=3 modules)
+backbone:
+  - [-1, 1, RTHRNetW18Balanced, [True]]  # 0 -> outputs [P3(48), P4(96), P5(192)]
+  - [0, 1, HRNetFeature, [0]]            # 1-P3/8
+  - [0, 1, HRNetFeature, [1]]            # 2-P4/16
+  - [0, 1, HRNetFeature, [2]]            # 3-P5/32
+
+head:
+  - [-1, 1, Conv, [256, 1, 1, None, 1, 1, False]]  # 4 input_proj.2
+  - [-1, 1, AIFI, [1024, 8]]                       # 5
+  - [-1, 1, Conv, [256, 1, 1]]                     # 6, Y5
+
+  - [-1, 1, nn.Upsample, [None, 2, 'nearest']]     # 7
+  - [2, 1, Conv, [256, 1, 1, None, 1, 1, False]]   # 8 input_proj.1
+  - [[-2, -1], 1, Concat, [1]]                     # 9
+  - [-1, 3, RepC3, [256, 0.5]]                     # 10, fpn_blocks.0
+  - [-1, 1, Conv, [256, 1, 1]]                     # 11, Y4
+
+  - [-1, 1, nn.Upsample, [None, 2, 'nearest']]     # 12
+  - [1, 1, Conv, [256, 1, 1, None, 1, 1, False]]   # 13 input_proj.0
+  - [[-2, -1], 1, Concat, [1]]                     # 14
+  - [-1, 3, RepC3, [256, 0.5]]                     # 15, fpn_blocks.1
+  - [-1, 1, Conv, [256, 3, 2]]                     # 16, downsample_convs.0
+
+  - [[-1, 11], 1, Concat, [1]]                     # 17
+  - [-1, 3, RepC3, [256, 0.5]]                     # 18, pan_blocks.0
+  - [-1, 1, Conv, [256, 3, 2]]                     # 19, downsample_convs.1
+
+  - [[-1, 6], 1, Concat, [1]]                      # 20
+  - [-1, 3, RepC3, [256, 0.5]]                     # 21, pan_blocks.1
+
+  - [[15, 18, 21], 1, RTDETRDecoder, [nc, 256, 300, 4, 8, 3]]  # 22 Detect(P3, P4, P5)

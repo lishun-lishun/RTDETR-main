@@ -50,6 +50,9 @@ EXPERIMENT_MAP: Dict[str, str] = {
     "V2_B": str(ABLATION_DIR / "V2_B_dmbasc.yaml"),
     "V2_C": str(ABLATION_DIR / "V2_C_cauad.yaml"),
     "V2_FULL": str(ABLATION_DIR / "V2_FULL_joint.yaml"),
+    "HRNetV2_W18": str(REPO_ROOT / "ultralytics" / "cfg" / "models" / "rt-detr" / "rtdetr_hrnet_w18.yaml"),
+    "RTHRNet_Fast": str(REPO_ROOT / "ultralytics" / "cfg" / "models" / "rt-detr" / "rtdetr_rthrnet_w18_fast.yaml"),
+    "RTHRNet_Balanced": str(REPO_ROOT / "ultralytics" / "cfg" / "models" / "rt-detr" / "rtdetr_rthrnet_w18_balanced.yaml"),
 }
 
 

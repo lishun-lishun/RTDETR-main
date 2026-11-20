@@ -18,6 +18,8 @@ CONFIGS = {
     'hrnet_laf0': 'rtdetr_hrnet_laf0.yaml',
     'hrnet_laf1': 'rtdetr_hrnet_laf1.yaml',
     'rb_hrnet_laf1': 'rtdetr_rb_hrnet_laf1.yaml',
+    'rthrnet_w18_fast': 'rtdetr_rthrnet_w18_fast.yaml',
+    'rthrnet_w18_balanced': 'rtdetr_rthrnet_w18_balanced.yaml',
 }
 
 
