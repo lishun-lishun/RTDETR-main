@@ -100,18 +100,15 @@ class CenterSurroundContrast(nn.Module):
             d_cs: [B, C, H, W] in range [0, 1)
         """
         # x: [B, C, H, W]
-        _, c, _, _ = x.shape
-        # The small denominator can overflow FP16 gradients even when tanh
-        # keeps the forward values finite. Keep this ratio and its backward in FP32.
+        b, c, h, w = x.shape
+        mu_cen = F.avg_pool2d(x, kernel_size=3, stride=1, padding=1)  # [B, C, H, W]
+        ring_w = self.ring_kernel.to(device=x.device, dtype=x.dtype).repeat(c, 1, 1, 1)
+        x_pad = F.pad(x, (2, 2, 2, 2), mode="replicate")
+        mu_sur = F.conv2d(x_pad, ring_w, bias=None, stride=1, padding=0, dilation=2, groups=c)  # [B, C, H, W]
         with torch.autocast(device_type=x.device.type, enabled=False):
-            x_fp32 = x.float()
-            mu_cen = F.avg_pool2d(x_fp32, kernel_size=3, stride=1, padding=1)
-            ring_w = self.ring_kernel.to(device=x.device).repeat(c, 1, 1, 1)
-            x_pad = F.pad(x_fp32, (2, 2, 2, 2), mode="replicate")
-            mu_sur = F.conv2d(x_pad, ring_w, bias=None, stride=1, padding=0, dilation=2, groups=c)
-            contrast = (mu_cen - mu_sur).abs() / (mu_sur.abs() + self.eps)
-            d_cs = torch.tanh(contrast)
-        return d_cs.to(dtype=x.dtype)
+            contrast = (mu_cen.float() - mu_sur.float()).abs() / (mu_sur.float().abs() + self.eps)
+            d_cs = torch.tanh(contrast).to(dtype=x.dtype)
+        return d_cs
 
 
 class WCASFP(nn.Module):

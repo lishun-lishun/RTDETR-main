@@ -1,0 +1,46 @@
+# Parameters
+nc: 80
+scales:
+  l: [1.00, 1.00, 1024]
+
+# V2-A (Standalone): Dual-Scale Coordinate-Preserving WCA-SFP v2 (P2->P3 at Layer 17 AND P3->P4 at Layer 12)
+innovation_v2_a:
+  enabled: true
+  aux_shallow_loss_weight: 0.20
+
+backbone:
+  - [-1, 1, ConvNormLayer, [32, 3, 2, None, False, 'relu']] # 0-P1/2
+  - [-1, 1, ConvNormLayer, [32, 3, 1, None, False, 'relu']] # 1
+  - [-1, 1, ConvNormLayer, [64, 3, 1, None, False, 'relu']] # 2
+  - [-1, 1, nn.MaxPool2d, [3, 2, 1]] # 3-P2/4
+
+  - [-1, 1, Blocks, [64, BasicBlock, 2, 2, 'relu']] # 4-P2/4
+  - [-1, 1, Blocks, [128, BasicBlock, 2, 3, 'relu']] # 5-P3/8
+  - [-1, 1, Blocks, [256, BasicBlock, 2, 4, 'relu']] # 6-P4/16
+  - [-1, 1, Blocks, [512, BasicBlock, 2, 5, 'relu']] # 7-P5/32
+
+head:
+  - [-1, 1, Conv, [256, 1, 1, None, 1, 1, False]]  # 8 input_proj.2
+  - [-1, 1, AIFI, [1024, 8]] # 9
+  - [-1, 1, Conv, [256, 1, 1]]  # 10, Y5, lateral_convs.0
+
+  - [-1, 1, nn.Upsample, [None, 2, 'nearest']] # 11
+  - [[5, 6], 1, WCASFPv2, [256, 0.30, 0.10, 2.0, True]]  # 12 P3->P4 Coordinate-Preserving Haar Prior
+  - [[-2, -1], 1, Concat, [1]] # 13
+  - [-1, 3, RepC3, [256, 0.5]]  # 14, fpn_blocks.0
+  - [-1, 1, Conv, [256, 1, 1]]   # 15, Y4, lateral_convs.1
+
+  - [-1, 1, nn.Upsample, [None, 2, 'nearest']] # 16
+  - [[4, 5], 1, WCASFPv2, [256, 0.30, 0.10, 2.0, True]]  # 17 P2->P3 Coordinate-Preserving Haar Prior
+  - [[-2, -1], 1, Concat, [1]]  # 18
+  - [-1, 3, RepC3, [256, 0.5]]    # 19, fpn_blocks.1
+  - [-1, 1, Conv, [256, 3, 2]]   # 20, downsample_convs.0
+
+  - [[-1, 15], 1, Concat, [1]]  # 21
+  - [-1, 3, RepC3, [256, 0.5]]    # 22, pan_blocks.0
+  - [-1, 1, Conv, [256, 3, 2]]   # 23, downsample_convs.1
+
+  - [[-1, 10], 1, Concat, [1]]  # 24
+  - [-1, 3, RepC3, [256, 0.5]]    # 25, pan_blocks.1
+
+  - [[19, 22, 25], 1, RTDETRDecoder, [nc, 256, 300, 4, 8, 3]]  # 26 Detect(P3, P4, P5)

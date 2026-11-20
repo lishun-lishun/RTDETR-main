@@ -19,6 +19,7 @@ all standalone/joint innovations:
 from __future__ import annotations
 import argparse
 import json
+import os
 import sys
 from pathlib import Path
 from typing import Dict
@@ -45,6 +46,10 @@ EXPERIMENT_MAP: Dict[str, str] = {
     "E13": str(ABLATION_DIR / "E13_inno10_tolf.yaml"),
     "E14": str(ABLATION_DIR / "E14_inno11_dysample_hwd.yaml"),
     "E15": str(ABLATION_DIR / "E15_inno12_smaifi.yaml"),
+    "V2_A": str(ABLATION_DIR / "V2_A_wcasfpv2.yaml"),
+    "V2_B": str(ABLATION_DIR / "V2_B_dmbasc.yaml"),
+    "V2_C": str(ABLATION_DIR / "V2_C_cauad.yaml"),
+    "V2_FULL": str(ABLATION_DIR / "V2_FULL_joint.yaml"),
 }
 
 
@@ -54,27 +59,27 @@ def build_fair_train_kwargs(
     data_yaml: str,
     pretrained_weights: str,
     epochs: int = 150,
-    batch: int = 8,
+    batch: int = 16,
     imgsz: int = 640,
     device: str = "0",
     seed: int = 0,
-    project: str = "runs/uav_paper_ablation_v2",
+    project: str = "runs/uav_paper_ablation",
 ) -> dict:
     return {
+        "model": model_yaml,
         "data": data_yaml,
         "epochs": int(epochs),
         "patience": 0,          # Disable early stopping so all runs complete exact 150 epochs
         "batch": int(batch),
-        "gradient_accumulation": 1,
         "imgsz": int(imgsz),
         "device": device,
-        "workers": 4,
+        "workers": 8,
         "optimizer": "AdamW",
         "lr0": 0.0001,
         "lrf": 0.1,             # Cosine decay to 1e-5 so AP75 / mAP50:95 converges cleanly
         "momentum": 0.9,
         "weight_decay": 0.0001,
-        "warmup_epochs": 2000,  # this trainer interprets the value as iterations
+        "warmup_epochs": 3.0,
         "cos_lr": True,
         "amp": True,
         "mosaic": 1.0,
@@ -84,8 +89,8 @@ def build_fair_train_kwargs(
         "deterministic": False, # Required for CUDA F.grid_sample backward in RT-DETR/DySample/GLRoI
         "project": project,
         "name": f"{exp_id}_seed{seed}",
-        "exist_ok": False,
-        "pretrained": False,
+        "exist_ok": True,
+        "pretrained": pretrained_weights if (pretrained_weights and os.path.exists(pretrained_weights)) else False,
     }
 
 
@@ -93,19 +98,15 @@ def main():
     parser = argparse.ArgumentParser(description="Fair Training Launcher for RT-DETR UAV Innovations (E0-E15)")
     parser.add_argument("--exp", type=str, required=True, choices=list(EXPERIMENT_MAP.keys()), help="Experiment ID (E0..E15)")
     parser.add_argument("--data", type=str, default="dataset/DUT-Anti-UAV.yaml", help="Dataset YAML path")
-    parser.add_argument("--weights", type=str, default="", help="Optional common R18 initialization checkpoint")
+    parser.add_argument("--weights", type=str, default="weights/rtdetr-r18.pt", help="Pretrained R18 checkpoint")
     parser.add_argument("--epochs", type=int, default=150, help="Fixed training epochs (default: 150)")
-    parser.add_argument("--batch", type=int, default=8, help="Effective batch size (default: 8)")
-    parser.add_argument("--micro-batch", type=int, default=8, help="Per-step batch size (must equal 8)")
+    parser.add_argument("--batch", type=int, default=16, help="Batch size (default: 16)")
     parser.add_argument("--imgsz", type=int, default=640, help="Input image size (default: 640)")
     parser.add_argument("--device", type=str, default="0", help="CUDA device ID(s)")
     parser.add_argument("--seed", type=int, default=0, help="Random seed")
-    parser.add_argument("--project", type=str, default="runs/uav_paper_ablation_v2", help="Output directory root")
+    parser.add_argument("--project", type=str, default="runs/uav_paper_ablation", help="Output directory root")
     parser.add_argument("--dry-run", action="store_true", help="Print fair training config without launching GPU run")
-    parser.add_argument("--execute", action="store_true", help="Start training; otherwise only print the config")
     args = parser.parse_args()
-    if args.batch != 8 or args.micro_batch != 8:
-        parser.error("This comparison protocol requires --batch 8 --micro-batch 8")
 
     model_yaml = EXPERIMENT_MAP[args.exp]
     if not Path(model_yaml).is_file():
@@ -126,16 +127,10 @@ def main():
 
     print("=" * 80)
     print(f"[RT-DETR UAV Paper Ablation Launcher] Experiment: {args.exp} (Seed: {args.seed})")
-    recipe = {
-        "experiment": args.exp,
-        "model_yaml": model_yaml,
-        "initial_weights": args.weights or None,
-        "train_kwargs": train_kwargs,
-    }
-    print(json.dumps(recipe, indent=2, ensure_ascii=False))
+    print(json.dumps(train_kwargs, indent=2, ensure_ascii=False))
     print("=" * 80)
 
-    if args.dry_run or not args.execute:
+    if args.dry_run:
         print("[DRY-RUN] Verified fair training recipe. Exiting without launching GPU training.")
         return
 
@@ -146,25 +141,16 @@ def main():
         raise RuntimeError(f"Imported external ultralytics ({actual_init}) instead of repo ({expected_init})!")
 
     from ultralytics import RTDETR
-    from ultralytics.utils.torch_utils import init_seeds
 
-    if not Path(args.data).is_file():
-        parser.error(f"Dataset YAML missing: {args.data}")
-    if args.weights and not Path(args.weights).is_file():
-        parser.error(f"Initialization checkpoint missing: {args.weights}")
-    out_dir = Path(args.project) / f"{args.exp}_seed{args.seed}"
-    if out_dir.exists():
-        parser.error(f"Output directory already exists: {out_dir}")
-
-    init_seeds(args.seed, deterministic=False)
     model = RTDETR(model_yaml)
-    if args.weights:
+    if args.weights and os.path.exists(args.weights):
         print(f"[INFO] Loading matching pretrained weights from {args.weights}")
         model.load(args.weights)
 
-    out_dir.mkdir(parents=True)
+    out_dir = Path(args.project) / f"{args.exp}_seed{args.seed}"
+    out_dir.mkdir(parents=True, exist_ok=True)
     (out_dir / "training_config.json").write_text(
-        json.dumps(recipe, indent=2, ensure_ascii=False), encoding="utf-8"
+        json.dumps(train_kwargs, indent=2, ensure_ascii=False), encoding="utf-8"
     )
 
     model.train(**train_kwargs)

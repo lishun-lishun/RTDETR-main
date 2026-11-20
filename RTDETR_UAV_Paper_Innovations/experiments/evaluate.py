@@ -113,7 +113,7 @@ def main():
         "Precision": float(results.results_dict.get("metrics/precision(B)", 0.0)),
         "Recall": float(results.results_dict.get("metrics/recall(B)", 0.0)),
         "mAP50": float(results.results_dict.get("metrics/mAP50(B)", 0.0)),
-        "mAP75": float(results.results_dict.get("metrics/mAP75(B)", 0.0)),
+        "mAP75": float(getattr(getattr(results, "box", None), "map75", results.results_dict.get("metrics/mAP75(B)", 0.0))),
         "mAP50_95": float(results.results_dict.get("metrics/mAP50-95(B)", 0.0)),
     }
 

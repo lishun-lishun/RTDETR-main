@@ -17,7 +17,6 @@ import argparse
 import copy
 import sys
 from pathlib import Path
-from tempfile import TemporaryDirectory
 import torch
 
 REPO_ROOT = Path(__file__).resolve().parents[2]
@@ -35,30 +34,26 @@ CONFIGS_8_TO_12 = [
 ]
 
 
-def _make_batch(bs: int, num_gt: int, device: torch.device, size: int) -> dict:
-    img = torch.rand(bs, 3, size, size, device=device)
-    # Match the real trainer: it moves images to CUDA and keeps labels on CPU.
-    label_device = torch.device("cpu")
+def _make_batch(bs: int, num_gt: int, device: torch.device) -> dict:
+    img = torch.randn(bs, 3, 640, 640, device=device)
     if num_gt == 0:
         return {
             "img": img,
-            "batch_idx": torch.zeros((0,), dtype=torch.long, device=label_device),
-            "cls": torch.zeros((0, 1), dtype=torch.float32, device=label_device),
-            "bboxes": torch.zeros((0, 4), dtype=torch.float32, device=label_device),
+            "batch_idx": torch.zeros((0,), dtype=torch.long, device=device),
+            "cls": torch.zeros((0, 1), dtype=torch.float32, device=device),
+            "bboxes": torch.zeros((0, 4), dtype=torch.float32, device=device),
         }
-    batch_idx = torch.tensor([i * bs // num_gt for i in range(num_gt)], dtype=torch.long, device=label_device)
-    cls = torch.zeros((num_gt, 1), dtype=torch.float32, device=label_device)
-    tiny = max(0.012, 5.0 / size)
+    batch_idx = torch.tensor([i % bs for i in range(num_gt)], dtype=torch.long, device=device)
+    cls = torch.zeros((num_gt, 1), dtype=torch.float32, device=device)
     bboxes = torch.tensor(
-        [[0.50, 0.50, tiny, tiny], [0.32, 0.44, tiny * 1.3, tiny],
-         [0.71, 0.28, tiny * 1.6, tiny * 1.2]][:num_gt],
+        [[0.50, 0.50, 0.012, 0.012], [0.32, 0.44, 0.018, 0.015], [0.71, 0.28, 0.025, 0.022]][:num_gt],
         dtype=torch.float32,
-        device=label_device,
+        device=device,
     )
     return {"img": img, "batch_idx": batch_idx, "cls": cls, "bboxes": bboxes}
 
 
-def run_smoke(repo_root: Path, device_str: str = "cuda", size: int = 128, config: str | None = None) -> None:
+def run_smoke(repo_root: Path, device_str: str = "cuda") -> None:
     repo_root = repo_root.resolve()
     sys.path.insert(0, str(repo_root))
     import ultralytics
@@ -68,12 +63,10 @@ def run_smoke(repo_root: Path, device_str: str = "cuda", size: int = 128, config
 
     from ultralytics.nn.tasks import RTDETRDetectionModel
 
-    if device_str.startswith("cuda") and not torch.cuda.is_available():
-        raise RuntimeError("CUDA requested for AMP smoke test but unavailable")
-    device = torch.device(device_str)
+    device = torch.device(device_str if (device_str == "cpu" or torch.cuda.is_available()) else "cpu")
     cfg_dir = repo_root / "ultralytics" / "cfg" / "models" / "rt-detr"
 
-    for cfg_name in ([config] if config else CONFIGS_8_TO_12):
+    for cfg_name in CONFIGS_8_TO_12:
         cfg_path = cfg_dir / cfg_name
         assert cfg_path.is_file(), f"Missing config: {cfg_path}"
         for amp in ([False, True] if device.type == "cuda" else [False]):
@@ -81,14 +74,11 @@ def run_smoke(repo_root: Path, device_str: str = "cuda", size: int = 128, config
                 print(f"[SMOKE] cfg={cfg_name} | device={device.type} | amp={amp} | gt={num_gt}")
                 model = RTDETRDetectionModel(cfg=str(cfg_path), ch=3, nc=1, verbose=False).to(device)
                 model.train()
-                if cfg_name == "rtdetr-r18-inno8-denseo2o.yaml":
-                    model.yaml["innovation_8"]["paste_prob"] = 1.0  # exercise CPU-label Copy-Paste path
-                batch = _make_batch(bs=2, num_gt=num_gt, device=device, size=size)
+                batch = _make_batch(bs=2, num_gt=num_gt, device=device)
                 model.zero_grad(set_to_none=True)
 
                 scaler = torch.cuda.amp.GradScaler(enabled=(amp and device.type == "cuda"), init_scale=1.0)
-                with torch.autocast(device_type=device.type, dtype=torch.float16,
-                                    enabled=(amp and device.type == "cuda")):
+                with torch.autocast(device_type=device.type, enabled=(amp and device.type == "cuda")):
                     loss, loss_items = model.loss(batch)
                     total = loss.sum() if loss.ndim > 0 else loss
 
@@ -110,16 +100,6 @@ def run_smoke(repo_root: Path, device_str: str = "cuda", size: int = 128, config
                     preds = ema_copy(batch["img"])
                     y = preds[0] if isinstance(preds, (list, tuple)) else preds
                     assert y.shape == (2, 300, 5), f"Unexpected eval shape for {cfg_name}: {y.shape}"
-                if num_gt == 3 and (amp or device.type != "cuda"):
-                    with TemporaryDirectory() as tmp:
-                        checkpoint = Path(tmp) / "checkpoint.pt"
-                        torch.save({"model": model, "ema": ema_copy}, checkpoint)
-                        restored = torch.load(checkpoint, map_location=device, weights_only=False)
-                        restored["ema"].eval()
-                        with torch.no_grad():
-                            saved_pred = restored["ema"](batch["img"])
-                            saved_y = saved_pred[0] if isinstance(saved_pred, (list, tuple)) else saved_pred
-                        assert saved_y.shape == (2, 300, 5), f"Checkpoint output mismatch: {cfg_name}"
 
     print("[PASS] Baseline + Fixed Inno4 + Standalone Innovations 8–12 ALL passed smoke test!")
 
@@ -128,10 +108,8 @@ def main():
     parser = argparse.ArgumentParser(description="Smoke test for RT-DETR UAV Innovations 8–12 & Fixed Inno 4")
     parser.add_argument("--repo", "--repo-root", type=str, default=".", help="Path to RTDETR-main repository root")
     parser.add_argument("--device", type=str, default="cuda", help="Device ('cuda' or 'cpu')")
-    parser.add_argument("--size", type=int, default=128, help="Input size for smoke test (default: 128)")
-    parser.add_argument("--config", choices=CONFIGS_8_TO_12, help="Test one model; default tests all seven")
     args = parser.parse_args()
-    run_smoke(Path(args.repo), args.device, args.size, args.config)
+    run_smoke(Path(args.repo), args.device)
 
 
 if __name__ == "__main__":

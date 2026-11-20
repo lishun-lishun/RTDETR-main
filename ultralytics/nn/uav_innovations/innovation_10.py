@@ -157,7 +157,6 @@ class TOLFDecoder(nn.Module):
         self.nc = int(nc)
         self.hd = int(hd)
         self.nq = int(nq)
-        self.num_queries = self.nq
         self.nl = len(ch)
         self.ndl = int(ndl)
         self.eval_idx = eval_idx if eval_idx >= 0 else ndl + eval_idx
@@ -178,13 +177,11 @@ class TOLFDecoder(nn.Module):
         except Exception:
             from .innovation_3 import UADDeformableDecoderLayer
             dec_layer = UADDeformableDecoderLayer(hd, nh, d_ffn, dropout, act, self.nl, ndp, enabled=False)
-        # Preserve RTDETRDecoder's decoder.layers.* checkpoint keys.
-        self.decoder = nn.Module()
-        self.decoder.layers = nn.ModuleList([copy.deepcopy(dec_layer) for _ in range(ndl)])
+        self.layers = nn.ModuleList([copy.deepcopy(dec_layer) for _ in range(ndl)])
 
         if self.num_denoising > 0:
-            self.denoising_class_embed = nn.Embedding(self.nc + 1, hd, padding_idx=self.nc)
-            init.normal_(self.denoising_class_embed.weight[:-1])
+            self.label_embed = nn.Embedding(self.nc + 1, hd, padding_idx=self.nc)
+            init.normal_(self.label_embed.weight[:-1])
 
         self.enc_output = nn.Sequential(nn.Linear(hd, hd), nn.LayerNorm(hd))
         self.enc_score_head = nn.Linear(hd, self.nc)
@@ -277,13 +274,18 @@ class TOLFDecoder(nn.Module):
         feats, shapes = self._get_encoder_input(x)
         dn_embed, dn_bbox, attn_mask, dn_meta = None, None, None, None
         if self.training and self.num_denoising > 0 and batch is not None:
-            from ultralytics.models.utils.ops import get_cdn_group
-            dn_embed, dn_bbox, attn_mask, dn_meta = get_cdn_group(
-                batch=batch, num_classes=self.nc, num_queries=self.nq,
-                class_embed=self.denoising_class_embed.weight, num_dn=self.num_denoising,
-                cls_noise_ratio=self.label_noise_ratio,
-                box_noise_scale=self.box_noise_scale, training=self.training,
-            )
+            try:
+                from ultralytics.models.utils.ops import get_cdn_group
+                dn_embed, dn_bbox, attn_mask, dn_meta = get_cdn_group(
+                    batch, self.nc, self.nq, self.label_noise_ratio, self.box_noise_scale,
+                    self.training, self.num_denoising, self.label_embed,
+                )
+            except Exception:
+                from .innovation_3 import _get_cdn_group_fallback
+                dn_embed, dn_bbox, attn_mask, dn_meta = _get_cdn_group_fallback(
+                    batch, self.nc, self.nq, self.label_noise_ratio, self.box_noise_scale,
+                    self.training, self.num_denoising, self.label_embed,
+                )
 
         embed, refer_bbox, enc_bboxes, enc_scores = self._get_decoder_input(feats, shapes, dn_embed, dn_bbox)
         num_dn = dn_meta["dn_num_split"][0] if (dn_meta is not None and "dn_num_split" in dn_meta) else 0
@@ -293,10 +295,17 @@ class TOLFDecoder(nn.Module):
         spatial_shapes = torch.as_tensor(shapes, dtype=torch.long, device=feats.device)
         level_start_index = torch.cat((spatial_shapes.new_zeros((1,)), spatial_shapes.prod(1).cumsum(0)[:-1]))
 
-        for i, layer in enumerate(self.decoder.layers):
+        for i, layer in enumerate(self.layers):
             ref_sig = refer_bbox.sigmoid()
             query_pos = self.query_pos_head(ref_sig)
-            output = layer(output, ref_sig, feats, shapes, None, attn_mask, query_pos)
+            try:
+                output = layer(output, ref_sig.unsqueeze(2), feats, shapes, None, attn_mask, query_pos)
+            except TypeError:
+                output = layer(
+                    output, refer_bbox=ref_sig.unsqueeze(2), value=feats, shapes=shapes,
+                    padding_mask=None, attn_mask=attn_mask, query_pos=query_pos,
+                    level_start_index=level_start_index,
+                )
 
             score = self.dec_score_head[i](output)
             bbox_delta = self.dec_bbox_head[i](output)

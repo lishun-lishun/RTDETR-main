@@ -89,11 +89,6 @@ class UAVDenseO2OAugmenter(nn.Module):
 
         bs, c, h, w = img.shape
         device = img.device
-        # The RT-DETR trainer moves images to CUDA in preprocess_batch but
-        # leaves detection labels on CPU. All augmentation indexing uses CUDA.
-        bboxes = bboxes.to(device=device, non_blocking=True)
-        cls = cls.to(device=device, non_blocking=True)
-        batch_idx = batch_idx.to(device=device, non_blocking=True).view(-1)
 
         # Collect donor pool of small/medium UAV crops from the current mini-batch
         areas = bboxes[:, 2] * bboxes[:, 3]
@@ -171,15 +166,9 @@ class UAVDenseO2OAugmenter(nn.Module):
 
         out_batch = dict(batch)
         out_batch["img"] = new_img
-        all_bboxes = torch.cat([bboxes] + extra_bboxes, dim=0)
-        all_cls = torch.cat([cls] + extra_cls, dim=0)
-        all_bidx = torch.cat([batch_idx] + extra_bidx, dim=0)
-        # RT-DETR's matcher splits GT tensors using gt_groups; each image's
-        # targets must therefore remain contiguous after Copy-Paste.
-        order = torch.argsort(all_bidx.view(-1), stable=True)
-        out_batch["bboxes"] = all_bboxes[order]
-        out_batch["cls"] = all_cls[order]
-        out_batch["batch_idx"] = all_bidx[order]
+        out_batch["bboxes"] = torch.cat([bboxes] + extra_bboxes, dim=0)
+        out_batch["cls"] = torch.cat([cls] + extra_cls, dim=0)
+        out_batch["batch_idx"] = torch.cat([batch_idx] + extra_bidx, dim=0)
         return out_batch
 
 
@@ -307,11 +296,13 @@ class AuxO2MRTDETRLoss(nn.Module):
         if not self.enabled:
             return loss_dict
 
-        # RTDETRDetectionModel.loss already separates DN from normal queries
-        # before passing preds to the criterion. Do not remove queries again.
+        # Extract matching decoder predictions (splitting off dn_meta if present)
         dec_bboxes, dec_scores = preds[0], preds[1]
-        if dec_bboxes.shape[2] != 300:
-            raise ValueError(f"Expected 300 normal queries after DN split, got {dec_bboxes.shape[2]}")
+        if dn_meta is not None and "dn_num_split" in dn_meta:
+            num_dn = dn_meta["dn_num_split"][0]
+            if dec_bboxes.shape[2] > num_dn:
+                dec_bboxes = dec_bboxes[:, :, num_dn:, :]
+                dec_scores = dec_scores[:, :, num_dn:, :]
 
         gt_bboxes = batch["bboxes"]
         gt_cls = batch["cls"].squeeze(-1).long() if batch["cls"].ndim > 1 else batch["cls"].long()

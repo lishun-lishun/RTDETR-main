@@ -82,5 +82,9 @@ from ultralytics.nn.uav_innovations import (
     DySample2x,
     HWDDownsample,
     SMAIFI,
+    WCASFPv2,
+    DMBASCRepC3,
+    ZeroShiftSignedClutterGate,
+    CAUADDecoder,
 )
 # <<< [UAV_PAPER_INNOVATIONS_END] <<<
