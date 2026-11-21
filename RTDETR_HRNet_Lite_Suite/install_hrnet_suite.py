@@ -5,22 +5,30 @@ Idempotent Installer for `RTDETR_HRNet_Lite_Suite` (Exp 1 - Exp 5) into `RTDETR-
 Integrates cleanly without modifying original `rtdetr-r18.yaml`, `hrnet.py`, or `rtdetr_hrnet_w18.yaml`.
 """
 
-from __future__ import annotations
+import sys
+if sys.version_info < (3, 8):
+    sys.exit(
+        f"[ERROR] install_hrnet_suite.py requires Python 3.8+ (detected: {sys.version}).\n"
+        f"Please activate your Conda environment first:\n"
+        f"    conda activate ultralytics_rtdetr\n"
+        f"or use the environment's Python explicitly:\n"
+        f"    ~/miniconda3/envs/ultralytics_rtdetr/bin/python RTDETR_HRNet_Lite_Suite/install_hrnet_suite.py\n"
+    )
+
 import argparse
 import re
 import shutil
-import sys
 from pathlib import Path
 
 SENTINEL_BEGIN = "# >>> [HRNET_LITE_SUITE_BEGIN] >>>"
 SENTINEL_END = "# <<< [HRNET_LITE_SUITE_END] <<<"
 
 
-def _strip(text: str) -> str:
+def _strip(text):
     return re.compile(rf"[ \t]*{re.escape(SENTINEL_BEGIN)}.*?{re.escape(SENTINEL_END)}[ \t]*\n?", re.DOTALL).sub("", text)
 
 
-def install(repo_path: str) -> int:
+def install(repo_path):
     pkg_root = Path(__file__).resolve().parent
     repo_root = Path(repo_path).resolve()
     if not (repo_root / "ultralytics").is_dir():

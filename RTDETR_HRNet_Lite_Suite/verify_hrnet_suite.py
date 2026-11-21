@@ -10,11 +10,19 @@ Checks all 5 full RT-DETR models:
   4. Side-by-side Params (M), Model Size (MB FP32), and NVIDIA A30 Latency (ms/img, FPS)
 """
 
-from __future__ import annotations
+import sys
+if sys.version_info < (3, 8):
+    sys.exit(
+        f"[ERROR] verify_hrnet_suite.py requires Python 3.8+ (detected: {sys.version}).\n"
+        f"Please activate your Conda environment first:\n"
+        f"    conda activate ultralytics_rtdetr\n"
+        f"or use the environment's Python explicitly:\n"
+        f"    ~/miniconda3/envs/ultralytics_rtdetr/bin/python RTDETR_HRNet_Lite_Suite/verify_hrnet_suite.py\n"
+    )
+
 import argparse
 import copy
 import os
-import sys
 import time
 from pathlib import Path
 import torch
@@ -25,7 +33,7 @@ if (REPO_ROOT / "ultralytics").is_dir():
     sys.path.insert(0, str(REPO_ROOT))
 
 
-def benchmark_model(model: torch.nn.Module, device: torch.device, imgsz: int = 640, warmup: int = 20, iters: int = 60):
+def benchmark_model(model, device, imgsz=640, warmup=20, iters=60):
     model.eval().to(device)
     x = torch.randn(1, 3, imgsz, imgsz, device=device)
     with torch.no_grad():

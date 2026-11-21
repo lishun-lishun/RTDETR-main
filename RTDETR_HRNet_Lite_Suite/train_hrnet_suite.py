@@ -8,20 +8,27 @@ pretrained backbone, AdamW + Cosine LR) so Exp 1 reproduces the +2% HRNet accura
 and Exp 2-5 measure pure lightweighting / acceleration trade-offs fairly.
 """
 
-from __future__ import annotations
+import sys
+if sys.version_info < (3, 8):
+    sys.exit(
+        f"[ERROR] train_hrnet_suite.py requires Python 3.8+ (detected: {sys.version}).\n"
+        f"Please activate your Conda environment first:\n"
+        f"    conda activate ultralytics_rtdetr\n"
+        f"or use the environment's Python explicitly:\n"
+        f"    ~/miniconda3/envs/ultralytics_rtdetr/bin/python RTDETR_HRNet_Lite_Suite/train_hrnet_suite.py\n"
+    )
+
 import argparse
 import json
 import os
-import sys
 from pathlib import Path
-from typing import Dict
 
 SUITE_DIR = Path(__file__).resolve().parent
 REPO_ROOT = SUITE_DIR.parent
 if (REPO_ROOT / "ultralytics").is_dir():
     sys.path.insert(0, str(REPO_ROOT))
 
-EXP_CONFIGS: Dict[str, str] = {
+EXP_CONFIGS = {
     "Exp1_BaseHRNet": str(SUITE_DIR / "configs" / "exp1_base_hrnet_w18.yaml"),
     "Exp2_PruneS4": str(SUITE_DIR / "configs" / "exp2_hrnet_prunes4.yaml"),
     "Exp3_PConvRep": str(SUITE_DIR / "configs" / "exp3_hrnet_pconvrep.yaml"),
