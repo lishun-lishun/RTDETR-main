@@ -53,6 +53,11 @@ EXPERIMENT_MAP: Dict[str, str] = {
     "HRNetV2_W18": str(REPO_ROOT / "ultralytics" / "cfg" / "models" / "rt-detr" / "rtdetr_hrnet_w18.yaml"),
     "RTHRNet_Fast": str(REPO_ROOT / "ultralytics" / "cfg" / "models" / "rt-detr" / "rtdetr_rthrnet_w18_fast.yaml"),
     "RTHRNet_Balanced": str(REPO_ROOT / "ultralytics" / "cfg" / "models" / "rt-detr" / "rtdetr_rthrnet_w18_balanced.yaml"),
+    "Exp1_BaseHRNet": str(REPO_ROOT / "ultralytics" / "cfg" / "models" / "rt-detr" / "exp1_base_hrnet_w18.yaml"),
+    "Exp2_PruneS4": str(REPO_ROOT / "ultralytics" / "cfg" / "models" / "rt-detr" / "exp2_hrnet_prunes4.yaml"),
+    "Exp3_PConvRep": str(REPO_ROOT / "ultralytics" / "cfg" / "models" / "rt-detr" / "exp3_hrnet_pconvrep.yaml"),
+    "Exp4_SlimNeck": str(REPO_ROOT / "ultralytics" / "cfg" / "models" / "rt-detr" / "exp4_hrnet_slimneck.yaml"),
+    "Exp5_FastHRFull": str(REPO_ROOT / "ultralytics" / "cfg" / "models" / "rt-detr" / "exp5_fasthr_rtdetr_full.yaml"),
 }
 
 

@@ -6,7 +6,10 @@ from functools import partial
 from einops import rearrange
 import numpy as np
 from typing import Tuple
-from timm.layers import trunc_normal_
+try:
+    from timm.layers import trunc_normal_
+except ImportError:
+    from timm.models.layers import trunc_normal_
 
 from ..modules.conv import Conv, autopad
 from ..modules.transformer import TransformerEncoderLayer

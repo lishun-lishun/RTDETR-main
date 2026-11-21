@@ -1,6 +1,9 @@
 import torch, math, tqdm
 import itertools
-from timm.layers import SqueezeExcite, trunc_normal_
+try:
+    from timm.layers import SqueezeExcite, trunc_normal_
+except ImportError:
+    from timm.models.layers import SqueezeExcite, trunc_normal_
 try:
     from torch.amp import custom_fwd, custom_bwd
 except:

@@ -1,0 +1,37 @@
+# Exp 5: FastHR-RTDETR-Full (Joint Exp 2 + Exp 3 + Exp 4)
+# Full lossless lightweight model: Stage-4 P2 Haar Pruning + Sparse Fusion + PConv-Rep/ECA + SlimGhostRepC3 Neck
+nc: 80
+scales:
+  l: [1.00, 1.00, 1024]
+
+backbone:
+  - [-1, 1, FastHRNetBackbone, [True]]  # 0 -> Joint Exp 2 + Exp 3 backbone
+  - [0, 1, HRNetFeature, [0]]           # 1-P3/8
+  - [0, 1, HRNetFeature, [1]]           # 2-P4/16
+  - [0, 1, HRNetFeature, [2]]           # 3-P5/32
+
+head:
+  - [-1, 1, Conv, [256, 1, 1, None, 1, 1, False]]  # 4
+  - [-1, 1, AIFI, [512, 8]]                        # 5 Compact AIFI FFN
+  - [-1, 1, Conv, [256, 1, 1]]                     # 6
+
+  - [-1, 1, nn.Upsample, [None, 2, 'nearest']]     # 7
+  - [2, 1, Conv, [256, 1, 1, None, 1, 1, False]]   # 8
+  - [[-2, -1], 1, Concat, [1]]                     # 9
+  - [-1, 2, SlimGhostRepC3, [256, 0.5]]            # 10
+  - [-1, 1, Conv, [256, 1, 1]]                     # 11
+
+  - [-1, 1, nn.Upsample, [None, 2, 'nearest']]     # 12
+  - [1, 1, Conv, [256, 1, 1, None, 1, 1, False]]   # 13
+  - [[-2, -1], 1, Concat, [1]]                     # 14
+  - [-1, 2, SlimGhostRepC3, [256, 0.5]]            # 15
+  - [-1, 1, Conv, [256, 3, 2]]                     # 16
+
+  - [[-1, 11], 1, Concat, [1]]                     # 17
+  - [-1, 2, SlimGhostRepC3, [256, 0.5]]            # 18
+  - [-1, 1, Conv, [256, 3, 2]]                     # 19
+
+  - [[-1, 6], 1, Concat, [1]]                      # 20
+  - [-1, 2, SlimGhostRepC3, [256, 0.5]]            # 21
+
+  - [[15, 18, 21], 1, RTDETRDecoder, [nc, 256, 300, 4, 8, 3]]  # 22

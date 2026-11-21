@@ -91,3 +91,15 @@ from ultralytics.nn.uav_innovations import (
 # >>> [RTHRNET_W18_BEGIN] >>>
 from .rt_hrnet import RTHRNetW18, RTHRNetW18Fast, RTHRNetW18Balanced, RepHRBlock, HaarP2FoldTransition
 # <<< [RTHRNET_W18_END] <<<
+# >>> [HRNET_LITE_SUITE_BEGIN] >>>
+from .hrnet_lite_suite import (
+    BaseHRNetV2W18,
+    HRNetPruneS4,
+    HRNetPConvRep,
+    FastHRNetBackbone,
+    SlimGhostRepC3,
+    HaarP2FoldTransition,
+    PConvRepBlock,
+    ECALayer,
+)
+# <<< [HRNET_LITE_SUITE_END] <<<

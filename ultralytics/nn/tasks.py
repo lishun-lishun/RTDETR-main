@@ -1,3 +1,12 @@
+# >>> [HRNET_LITE_SUITE_BEGIN] >>>
+from ultralytics.nn.modules.hrnet_lite_suite import (
+    BaseHRNetV2W18,
+    HRNetPruneS4,
+    HRNetPConvRep,
+    FastHRNetBackbone,
+    SlimGhostRepC3,
+)
+# <<< [HRNET_LITE_SUITE_END] <<<
 # >>> [RTHRNET_W18_BEGIN] >>>
 from ultralytics.nn.modules.rt_hrnet import RTHRNetW18, RTHRNetW18Fast, RTHRNetW18Balanced
 # <<< [RTHRNET_W18_END] <<<
@@ -1065,6 +1074,26 @@ def parse_model(d, ch, verbose=True, warehouse_manager=None):  # model_dict, inp
             args.insert(1, [ch[x] for x in f])
         # <<< [UAV_PAPER_INNOVATIONS_END] <<<
         # >>> [RTHRNET_W18_BEGIN] >>>
+        # >>> [HRNET_LITE_SUITE_BEGIN] >>>
+        elif m in (BaseHRNetV2W18, HRNetPruneS4, HRNetPConvRep, FastHRNetBackbone):
+            m_ = m(*args)
+            c2 = list(m_.out_channels)
+            t = str(m)[8:-2].replace("__main__.", "")
+            m_.np = sum(x.numel() for x in m_.parameters())
+            m_.i, m_.f, m_.type = i, f, t
+            save.extend(x % i for x in ([f] if isinstance(f, int) else f) if x != -1)
+            layers.append(m_)
+            if i == 0:
+                ch = []
+            ch.append(c2)
+            continue
+        elif m is SlimGhostRepC3:
+            c1, c2 = ch[f], args[0]
+            if c2 != nc:
+                c2 = make_divisible(min(c2, max_channels) * width, 8)
+            args = [c1, c2, n, *args[1:]]
+            n = 1
+        # <<< [HRNET_LITE_SUITE_END] <<<
         elif m in (RTHRNetW18, RTHRNetW18Fast, RTHRNetW18Balanced):
             m_ = m(*args)
             c2 = list(m_.out_channels)
