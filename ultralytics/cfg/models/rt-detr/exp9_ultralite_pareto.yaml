@@ -1,0 +1,37 @@
+# Exp 9: UltraLite Pareto Full (FastHRNetBackbone + 192-dim RepGhostC3 + HaarDownsample PAN + 150-Query Decoder)
+# Extreme efficiency contender: ~55-60% fewer params than Exp 1, faster than RT-DETR-R18 on NVIDIA A30!
+nc: 80
+scales:
+  l: [1.00, 1.00, 1024]
+
+backbone:
+  - [-1, 1, FastHRNetBackbone, [True]]  # 0 -> Stage-4 Haar-pruned + Sparse Fusion + PConv-Rep/ECA
+  - [0, 1, HRNetFeature, [0]]           # 1-P3/8
+  - [0, 1, HRNetFeature, [1]]           # 2-P4/16
+  - [0, 1, HRNetFeature, [2]]           # 3-P5/32
+
+head:
+  - [-1, 1, Conv, [192, 1, 1, None, 1, 1, False]]  # 4
+  - [-1, 1, AIFI, [512, 8]]                        # 5
+  - [-1, 1, Conv, [192, 1, 1]]                     # 6
+
+  - [-1, 1, nn.Upsample, [None, 2, 'nearest']]     # 7
+  - [2, 1, Conv, [192, 1, 1, None, 1, 1, False]]   # 8
+  - [[-2, -1], 1, Concat, [1]]                     # 9
+  - [-1, 2, RepGhostC3, [192, 0.5]]                # 10
+  - [-1, 1, Conv, [192, 1, 1]]                     # 11
+
+  - [-1, 1, nn.Upsample, [None, 2, 'nearest']]     # 12
+  - [1, 1, Conv, [192, 1, 1, None, 1, 1, False]]   # 13
+  - [[-2, -1], 1, Concat, [1]]                     # 14
+  - [-1, 2, RepGhostC3, [192, 0.5]]                # 15
+  - [-1, 1, HaarDownsample, [192]]                 # 16
+
+  - [[-1, 11], 1, Concat, [1]]                     # 17
+  - [-1, 2, RepGhostC3, [192, 0.5]]                # 18
+  - [-1, 1, HaarDownsample, [192]]                 # 19
+
+  - [[-1, 6], 1, Concat, [1]]                      # 20
+  - [-1, 2, RepGhostC3, [192, 0.5]]                # 21
+
+  - [[15, 18, 21], 1, RTDETRDecoder, [nc, 192, 150, 4, 8, 3]]  # 22

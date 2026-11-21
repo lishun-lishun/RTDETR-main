@@ -1,13 +1,7 @@
 #!/usr/bin/env python3
 # -*- coding: utf-8 -*-
 """
-Server-Side Verification & NVIDIA A30 Benchmark for `RTDETR_HRNet_Lite_Suite` (Exp 1 - Exp 5)
-==============================================================================================
-Checks all 5 full RT-DETR models:
-  1. Strict ImageNet pretrained weight loading (`hrnetv2_w18-8cb57bb9.pth`)
-  2. Forward/backward pass + ModelEMA deepcopy safety
-  3. Deploy-time structural reparameterization (`fuse()`)
-  4. Side-by-side Params (M), Model Size (MB FP32), and NVIDIA A30 Latency (ms/img, FPS)
+Server-Side Verification & NVIDIA A30 Benchmark for `RTDETR_HRNet_Lite_Suite` (Exp 1 - Exp 9)
 """
 
 import sys
@@ -51,7 +45,7 @@ def benchmark_model(model, device, imgsz=640, warmup=20, iters=60):
 
 
 def main():
-    parser = argparse.ArgumentParser(description="Verify & benchmark Exp1-Exp5 full RT-DETR models")
+    parser = argparse.ArgumentParser(description="Verify & benchmark Exp1-Exp9 full RT-DETR models")
     parser.add_argument("--pretrained-backbone", type=str, default="")
     parser.add_argument("--device", type=str, default="cuda:0")
     parser.add_argument("--imgsz", type=int, default=640)
@@ -69,6 +63,10 @@ def main():
         ("Exp3_PConvRep", SUITE_DIR / "configs" / "exp3_hrnet_pconvrep.yaml"),
         ("Exp4_SlimNeck", SUITE_DIR / "configs" / "exp4_hrnet_slimneck.yaml"),
         ("Exp5_FastHRFull", SUITE_DIR / "configs" / "exp5_fasthr_rtdetr_full.yaml"),
+        ("Exp6_StarHRNet", SUITE_DIR / "configs" / "exp6_hrnet_starrep.yaml"),
+        ("Exp7_Lite192Dec", SUITE_DIR / "configs" / "exp7_hrnet_lite192_decoder.yaml"),
+        ("Exp8_RepGhostHaar", SUITE_DIR / "configs" / "exp8_hrnet_repghost_haarneck.yaml"),
+        ("Exp9_UltraLite", SUITE_DIR / "configs" / "exp9_ultralite_pareto.yaml"),
     ]
 
     rows = []
@@ -79,20 +77,18 @@ def main():
         ema = copy.deepcopy(net)
         assert ema is not net
         params_train = sum(p.numel() for p in net.parameters()) / 1e6
-
-        # Fuse deploy branches (PConvRepBlock / SlimGhostRepC3 / Conv+BN)
         net.fuse()
         params_deploy = sum(p.numel() for p in net.parameters()) / 1e6
-        size_mb = params_deploy * 4.0  # FP32 MB
+        size_mb = params_deploy * 4.0
         ms, fps = benchmark_model(net, device, imgsz=args.imgsz)
         rows.append((name, params_train, params_deploy, size_mb, ms, fps))
 
-    print("\n" + "=" * 86)
-    print(f"{'Experiment':<18} | {'Train Params':>12} | {'Deploy Params':>13} | {'FP32 Size':>9} | {'Latency':>9} | {'FPS':>7}")
-    print("-" * 86)
+    print("\n" + "=" * 88)
+    print(f"{'Experiment':<20} | {'Train Params':>12} | {'Deploy Params':>13} | {'FP32 Size':>9} | {'Latency':>9} | {'FPS':>7}")
+    print("-" * 88)
     for name, pt, pd, mb, ms, fps in rows:
-        print(f"{name:<18} | {pt:>10.2f} M | {pd:>11.2f} M | {mb:>6.1f} MB | {ms:>6.2f} ms | {fps:>7.1f}")
-    print("=" * 86)
+        print(f"{name:<20} | {pt:>10.2f} M | {pd:>11.2f} M | {mb:>6.1f} MB | {ms:>6.2f} ms | {fps:>7.1f}")
+    print("=" * 88)
 
 
 if __name__ == "__main__":

@@ -96,10 +96,14 @@ from .hrnet_lite_suite import (
     BaseHRNetV2W18,
     HRNetPruneS4,
     HRNetPConvRep,
+    HRNetStarRep,
     FastHRNetBackbone,
     SlimGhostRepC3,
+    RepGhostC3,
+    HaarDownsample,
     HaarP2FoldTransition,
     PConvRepBlock,
+    StarRepBlock,
     ECALayer,
 )
 # <<< [HRNET_LITE_SUITE_END] <<<

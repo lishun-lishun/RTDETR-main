@@ -1,11 +1,10 @@
 #!/usr/bin/env python3
 # -*- coding: utf-8 -*-
 """
-Fair Training Launcher for RT-DETR HRNet-W18 Lightweight Suite (Exp 1 - Exp 5)
+Fair Training Launcher for RT-DETR HRNet-W18 Lightweight Suite (Exp 1 - Exp 9)
 ==============================================================================
 Aligns key hyperparameters with original `RT-DETR-UAV` (`mosaic=0.0`, ImageNet HRNetV2-W18
-pretrained backbone, AdamW + Cosine LR) so Exp 1 reproduces the +2% HRNet accuracy gain
-and Exp 2-5 measure pure lightweighting / acceleration trade-offs fairly.
+pretrained backbone, AdamW + Cosine LR) for fair end-to-end comparison across all 9 experiments.
 """
 
 import sys
@@ -34,11 +33,15 @@ EXP_CONFIGS = {
     "Exp3_PConvRep": str(SUITE_DIR / "configs" / "exp3_hrnet_pconvrep.yaml"),
     "Exp4_SlimNeck": str(SUITE_DIR / "configs" / "exp4_hrnet_slimneck.yaml"),
     "Exp5_FastHRFull": str(SUITE_DIR / "configs" / "exp5_fasthr_rtdetr_full.yaml"),
+    "Exp6_StarHRNet": str(SUITE_DIR / "configs" / "exp6_hrnet_starrep.yaml"),
+    "Exp7_Lite192Dec": str(SUITE_DIR / "configs" / "exp7_hrnet_lite192_decoder.yaml"),
+    "Exp8_RepGhostHaar": str(SUITE_DIR / "configs" / "exp8_hrnet_repghost_haarneck.yaml"),
+    "Exp9_UltraLite": str(SUITE_DIR / "configs" / "exp9_ultralite_pareto.yaml"),
 }
 
 
 def main():
-    parser = argparse.ArgumentParser(description="Fair Training Launcher for HRNet-Lite Suite (Exp1-Exp5)")
+    parser = argparse.ArgumentParser(description="Fair Training Launcher for HRNet-Lite Suite (Exp1-Exp9)")
     parser.add_argument("--exp", type=str, required=True, choices=list(EXP_CONFIGS.keys()))
     parser.add_argument("--data", type=str, default="dataset/DUT-Anti-UAV.yaml")
     parser.add_argument("--pretrained-backbone", type=str, default="", help="Optional path to hrnetv2_w18-8cb57bb9.pth")
@@ -47,12 +50,12 @@ def main():
     parser.add_argument("--micro-batch", type=int, default=8, help="Compatibility parameter for batch size")
     parser.add_argument("--imgsz", type=int, default=640)
     parser.add_argument("--lr0", type=float, default=0.0001)
-    parser.add_argument("--mosaic", type=float, default=0.0, help="Default 0.0 (matches original RT-DETR-UAV, prevents shrinking tiny UAVs)")
+    parser.add_argument("--mosaic", type=float, default=0.0, help="Default 0.0 (matches original RT-DETR-UAV)")
     parser.add_argument("--device", type=str, default="0")
     parser.add_argument("--seed", type=int, default=0)
     parser.add_argument("--workers", type=int, default=8)
     parser.add_argument("--project", type=str, default="runs/hrnet_lite_suite")
-    parser.add_argument("--execute", action="store_true", help="Launch actual GPU training (omit for dry-run preview)")
+    parser.add_argument("--execute", action="store_true", help="Launch actual GPU training (omit for dry-run)")
     args = parser.parse_args()
 
     if args.pretrained_backbone:
@@ -84,7 +87,7 @@ def main():
         "project": args.project,
         "name": f"{args.exp}_seed{args.seed}",
         "exist_ok": False,
-        "pretrained": False,  # Backbone loads ImageNet hrnetv2_w18-8cb57bb9.pth directly!
+        "pretrained": False,
     }
 
     print("=" * 80)

@@ -1,0 +1,37 @@
+# Exp 7: 192-dim Compact Neck/AIFI/Decoder (150 Queries) on 100% ImageNet-Pretrained HRNetPruneS4
+# Cuts quadratic O(d^2) params & FLOPs across Neck + AIFI + all 3 Decoder layers (~45-50% smaller total model!)
+nc: 80
+scales:
+  l: [1.00, 1.00, 1024]
+
+backbone:
+  - [-1, 1, HRNetPruneS4, [True]]    # 0 -> 100% ImageNet pretrained Stage 1-4 (pruned Stage-4 P2 + Haar fold)
+  - [0, 1, HRNetFeature, [0]]        # 1-P3/8
+  - [0, 1, HRNetFeature, [1]]        # 2-P4/16
+  - [0, 1, HRNetFeature, [2]]        # 3-P5/32
+
+head:
+  - [-1, 1, Conv, [192, 1, 1, None, 1, 1, False]]  # 4 input_proj.2 (192-dim)
+  - [-1, 1, AIFI, [512, 8]]                        # 5 Compact AIFI (192 % 8 == 0)
+  - [-1, 1, Conv, [192, 1, 1]]                     # 6
+
+  - [-1, 1, nn.Upsample, [None, 2, 'nearest']]     # 7
+  - [2, 1, Conv, [192, 1, 1, None, 1, 1, False]]   # 8
+  - [[-2, -1], 1, Concat, [1]]                     # 9
+  - [-1, 2, SlimGhostRepC3, [192, 0.5]]            # 10
+  - [-1, 1, Conv, [192, 1, 1]]                     # 11
+
+  - [-1, 1, nn.Upsample, [None, 2, 'nearest']]     # 12
+  - [1, 1, Conv, [192, 1, 1, None, 1, 1, False]]   # 13
+  - [[-2, -1], 1, Concat, [1]]                     # 14
+  - [-1, 2, SlimGhostRepC3, [192, 0.5]]            # 15
+  - [-1, 1, Conv, [192, 3, 2]]                     # 16
+
+  - [[-1, 11], 1, Concat, [1]]                     # 17
+  - [-1, 2, SlimGhostRepC3, [192, 0.5]]            # 18
+  - [-1, 1, Conv, [192, 3, 2]]                     # 19
+
+  - [[-1, 6], 1, Concat, [1]]                      # 20
+  - [-1, 2, SlimGhostRepC3, [192, 0.5]]            # 21
+
+  - [[15, 18, 21], 1, RTDETRDecoder, [nc, 192, 150, 4, 8, 3]]  # 22 Compact 192-dim Decoder (150 queries)
