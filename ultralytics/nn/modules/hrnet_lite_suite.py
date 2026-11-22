@@ -294,7 +294,7 @@ class PConvRepBlock(nn.Module):
         self.pw2 = nn.Conv2d(hidden, self.channels, kernel_size=1, bias=False)
         self.bn2: nn.Module = nn.BatchNorm2d(self.channels)
         self.eca = ECALayer(self.channels) if use_eca else nn.Identity()
-        self.act = nn.ReLU(inplace=True)
+        self.act = nn.ReLU(inplace=False)
 
         nn.init.constant_(self.bn2.weight, 0.0)
         nn.init.constant_(self.bn2.bias, 0.0)
@@ -360,8 +360,8 @@ class StarRepBlock(nn.Module):
         self.g = nn.Conv2d(hidden, self.channels, 1, bias=False)
         self.gn: nn.Module = nn.BatchNorm2d(self.channels)
         self.eca = ECALayer(self.channels) if use_eca else nn.Identity()
-        self.act6 = nn.ReLU6(inplace=True)
-        self.relu = nn.ReLU(inplace=True)
+        self.act6 = nn.ReLU6(inplace=False)
+        self.relu = nn.ReLU(inplace=False)
 
         nn.init.constant_(self.gn.weight, 0.0)
         nn.init.constant_(self.gn.bias, 0.0)
@@ -399,9 +399,9 @@ class StarRepBlock(nn.Module):
         else:
             x1 = self.pbn3x3(self.pconv3x3(x1)) + self.pbn1x1(self.pconv1x1(x1))
         feat = torch.cat([x1, x2], dim=1)
-        star = self.act6(self.f1(feat)) * self.f2(feat)
+        star = F.relu6(self.f1(feat), inplace=False) * self.f2(feat)
         out = self.eca(self.gn(self.g(star)))
-        return self.relu(x + out)
+        return F.relu(x + out, inplace=False)
 
 
 class StarFastBlock(nn.Module):
@@ -429,8 +429,8 @@ class StarFastBlock(nn.Module):
 
         self.g = nn.Conv2d(hidden, self.channels, kernel_size=1, bias=False)
         self.gn: nn.Module = nn.BatchNorm2d(self.channels)
-        self.act6 = nn.ReLU6(inplace=True)
-        self.relu = nn.ReLU(inplace=True)
+        self.act6 = nn.ReLU6(inplace=False)
+        self.relu = nn.ReLU(inplace=False)
 
         # Zero-Shift residual init
         nn.init.constant_(self.gn.weight, 0.0)
@@ -454,8 +454,8 @@ class StarFastBlock(nn.Module):
     def forward(self, x: torch.Tensor) -> torch.Tensor:
         feat = self.sbn(self.sconv(x))
         a, b = self.f12_bn(self.f12(feat)).chunk(2, dim=1)
-        out = self.gn(self.g(self.act6(a) * b))
-        return self.relu(x + out)
+        out = self.gn(self.g(F.relu6(a, inplace=False) * b))
+        return F.relu(x + out, inplace=False)
 
 
 class HaarP2FoldTransition(nn.Module):
@@ -470,7 +470,7 @@ class HaarP2FoldTransition(nn.Module):
         nn.init.constant_(self.fold_proj[1].weight, 0.0)
         nn.init.constant_(self.fold_proj[1].bias, 0.0)
         self.u_alpha = nn.Parameter(torch.tensor(0.0, dtype=torch.float32))
-        self.relu = nn.ReLU(inplace=True)
+        self.relu = nn.ReLU(inplace=False)
 
     def switch_to_deploy(self) -> None:
         self.fold_proj = fuse_sequential_conv_bn(self.fold_proj)
