@@ -67,6 +67,11 @@ EXPERIMENT_MAP: Dict[str, str] = {
     "Exp12_StarHR_Balanced": str(REPO_ROOT / "ultralytics" / "cfg" / "models" / "rt-detr" / "exp12_starhr_balanced.yaml"),
     "Exp13_StarHR_Turbo": str(REPO_ROOT / "ultralytics" / "cfg" / "models" / "rt-detr" / "exp13_starhr_turbo.yaml"),
     "Exp14_StarHR_Turbo_D2": str(REPO_ROOT / "ultralytics" / "cfg" / "models" / "rt-detr" / "exp14_starhr_turbo_d2.yaml"),
+    "Exp15_SFGD_Bridge": str(REPO_ROOT / "ultralytics" / "cfg" / "models" / "rt-detr" / "exp15_neck_sfgd_bridge.yaml"),
+    "Exp16_SFGD_ZeroConcat": str(REPO_ROOT / "ultralytics" / "cfg" / "models" / "rt-detr" / "exp16_neck_sfgd_zeroconcat.yaml"),
+    "Exp17_SFGD_Full": str(REPO_ROOT / "ultralytics" / "cfg" / "models" / "rt-detr" / "exp17_neck_sfgd_full.yaml"),
+    "Exp18_SFGD_Turbo192": str(REPO_ROOT / "ultralytics" / "cfg" / "models" / "rt-detr" / "exp18_neck_sfgd_turbo192.yaml"),
+    "Exp19_R18_SFGD": str(REPO_ROOT / "ultralytics" / "cfg" / "models" / "rt-detr" / "exp19_r18_sfgd_neck.yaml"),
 }
 
 

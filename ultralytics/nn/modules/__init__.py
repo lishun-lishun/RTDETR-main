@@ -111,3 +111,6 @@ from .hrnet_lite_suite import (
     ECALayer,
 )
 # <<< [HRNET_LITE_SUITE_END] <<<
+# >>> [SFGD_NECK_BEGIN] >>>
+from .sfgd_neck import FreqDecoupledBridge, SoftplusZeroConcatFusion, DualFreqAIFI
+# <<< [SFGD_NECK_END] <<<

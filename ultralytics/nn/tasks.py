@@ -1,3 +1,6 @@
+# >>> [SFGD_NECK_BEGIN] >>>
+from ultralytics.nn.modules.sfgd_neck import FreqDecoupledBridge, SoftplusZeroConcatFusion, DualFreqAIFI
+# <<< [SFGD_NECK_END] <<<
 # >>> [HRNET_LITE_SUITE_BEGIN] >>>
 from ultralytics.nn.modules.hrnet_lite_suite import (
     BaseHRNetV2W18,
@@ -1089,6 +1092,18 @@ def parse_model(d, ch, verbose=True, warehouse_manager=None):  # model_dict, inp
             args.insert(1, [ch[x] for x in f])
         # <<< [UAV_PAPER_INNOVATIONS_END] <<<
         # >>> [RTHRNET_W18_BEGIN] >>>
+        # >>> [SFGD_NECK_BEGIN] >>>
+        elif m in (FreqDecoupledBridge, SoftplusZeroConcatFusion):
+            c1 = [ch[x] for x in f]
+            c2 = args[0]
+            if c2 != nc:
+                c2 = make_divisible(min(c2, max_channels) * width, 8)
+            args = [c1[0], c1[1], c2]
+        elif m is DualFreqAIFI:
+            c1 = ch[f]
+            c2 = c1
+            args = [c1, *args]
+        # <<< [SFGD_NECK_END] <<<
         # >>> [HRNET_LITE_SUITE_BEGIN] >>>
         elif m in (BaseHRNetV2W18, HRNetPruneS4, HRNetPConvRep, HRNetStarRep, FastHRNetBackbone, StarHRFastBackbone, StarHRBalancedBackbone, StarHRTurboBackbone):
             m_ = m(*args)

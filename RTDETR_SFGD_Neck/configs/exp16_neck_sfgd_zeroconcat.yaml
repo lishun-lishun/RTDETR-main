@@ -1,0 +1,37 @@
+# Exp 16: Neck Ablation B - SoftplusZeroConcatFusion + HaarDownsample PAN on Exp12 StarHRBalancedBackbone
+# Cuts RepC3 input channels 512 -> 256 + lossless 2D Haar PAN downsampling
+nc: 80
+scales:
+  l: [1.00, 1.00, 1024]
+
+backbone:
+  - [-1, 1, StarHRBalancedBackbone, [True]]  # 0
+  - [0, 1, HRNetFeature, [0]]                # 1-P3/8
+  - [0, 1, HRNetFeature, [1]]                # 2-P4/16
+  - [0, 1, HRNetFeature, [2]]                # 3-P5/32
+
+head:
+  - [-1, 1, Conv, [256, 1, 1, None, 1, 1, False]]  # 4
+  - [-1, 1, AIFI, [512, 8]]                        # 5
+  - [-1, 1, Conv, [256, 1, 1]]                     # 6, Y5
+
+  - [-1, 1, nn.Upsample, [None, 2, 'nearest']]     # 7
+  - [2, 1, Conv, [256, 1, 1, None, 1, 1, False]]   # 8
+  - [[-2, -1], 1, SoftplusZeroConcatFusion, [256]] # 9 Zero-Concat Gated Fusion (256ch out!)
+  - [-1, 2, RepC3, [256, 0.5]]                     # 10 (256 -> 256 instead of 512 -> 256!)
+  - [-1, 1, Conv, [256, 1, 1]]                     # 11, Y4
+
+  - [-1, 1, nn.Upsample, [None, 2, 'nearest']]     # 12
+  - [1, 1, Conv, [256, 1, 1, None, 1, 1, False]]   # 13
+  - [[-2, -1], 1, SoftplusZeroConcatFusion, [256]] # 14 Zero-Concat Gated Fusion
+  - [-1, 2, RepC3, [256, 0.5]]                     # 15
+  - [-1, 1, HaarDownsample, [256]]                 # 16 Alias-Free 2D Haar DWT Downsample (P3->P4)
+
+  - [[11, -1], 1, SoftplusZeroConcatFusion, [256]] # 17 Zero-Concat Gated Fusion (Y4 sem screens P3_down)
+  - [-1, 2, RepC3, [256, 0.5]]                     # 18
+  - [-1, 1, HaarDownsample, [256]]                 # 19 Alias-Free 2D Haar DWT Downsample (P4->P5)
+
+  - [[6, -1], 1, SoftplusZeroConcatFusion, [256]]  # 20 Zero-Concat Gated Fusion (Y5 sem screens P4_down)
+  - [-1, 2, RepC3, [256, 0.5]]                     # 21
+
+  - [[15, 18, 21], 1, RTDETRDecoder, [nc, 256, 300, 4, 8, 3]]  # 22

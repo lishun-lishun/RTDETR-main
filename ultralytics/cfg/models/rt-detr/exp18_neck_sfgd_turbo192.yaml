@@ -1,0 +1,37 @@
+# Exp 18: Ultimate Joint Model - StarHRTurboBackbone + Full 192-dim SFGD-Neck + 2-Layer Decoder
+# Combines Innovation 1 (Turbo Backbone) + Innovation 2 (SFGD-Neck) + Innovation 3 (Compact 2-Layer Decoder)
+nc: 80
+scales:
+  l: [1.00, 1.00, 1024]
+
+backbone:
+  - [-1, 1, StarHRTurboBackbone, [True]]  # 0
+  - [0, 1, HRNetFeature, [0]]             # 1-P3/8
+  - [0, 1, HRNetFeature, [1]]             # 2-P4/16
+  - [0, 1, HRNetFeature, [2]]             # 3-P5/32
+
+head:
+  - [-1, 1, Conv, [192, 1, 1, None, 1, 1, False]]  # 4
+  - [-1, 1, DualFreqAIFI, [512, 8]]                # 5
+  - [-1, 1, Conv, [192, 1, 1]]                     # 6, Y5
+
+  - [-1, 1, nn.Upsample, [None, 2, 'nearest']]     # 7
+  - [2, 1, Conv, [192, 1, 1, None, 1, 1, False]]   # 8
+  - [[-2, -1], 1, SoftplusZeroConcatFusion, [192]] # 9
+  - [-1, 2, RepC3, [192, 0.5]]                     # 10
+  - [-1, 1, Conv, [192, 1, 1]]                     # 11, Y4
+
+  - [-1, 1, nn.Upsample, [None, 2, 'nearest']]     # 12
+  - [[1, 2], 1, FreqDecoupledBridge, [192]]        # 13
+  - [[-2, -1], 1, SoftplusZeroConcatFusion, [192]] # 14
+  - [-1, 2, RepC3, [192, 0.5]]                     # 15
+  - [-1, 1, HaarDownsample, [192]]                 # 16
+
+  - [[11, -1], 1, SoftplusZeroConcatFusion, [192]] # 17
+  - [-1, 2, RepC3, [192, 0.5]]                     # 18
+  - [-1, 1, HaarDownsample, [192]]                 # 19
+
+  - [[6, -1], 1, SoftplusZeroConcatFusion, [192]]  # 20
+  - [-1, 2, RepC3, [192, 0.5]]                     # 21
+
+  - [[15, 18, 21], 1, RTDETRDecoder, [nc, 192, 150, 4, 8, 2]]  # 22
