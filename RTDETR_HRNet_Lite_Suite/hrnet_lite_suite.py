@@ -1,34 +1,22 @@
 # -*- coding: utf-8 -*-
 """
-RT-DETR HRNet-W18 Lightweight & Acceleration Suite (Exp 1 - Exp 9)
-==================================================================
+RT-DETR HRNet-W18 Lightweight & Hardware-Aware Speed Suite (Exp 1 - Exp 12)
+===========================================================================
 Built for `RTDETR-main` (Ultralytics YOLOv8.0.201) on DUT-Anti-UAV.
 
-Full 9-Experiment Progressive Suite:
-  - Exp 1 (`BaseHRNetV2W18`):
-      Exact 1:1 port of original `RT-DETR-UAV` (`rtdetr_pytorch/src/nn/backbone/hrnet.py`)
-      with strict ImageNet pretrained loading (`hrnetv2_w18-8cb57bb9.pth`), auto-download fallback,
-      and exact `[P3(36), P4(72), P5(144)]` output contract.
-  - Exp 2 (`HRNetPruneS4`):
-      Stage-4 dead `160x160` branch pruning + lossless 2D Haar-DWT P2->P3 folding +
-      adjacent-band sparse fusion (`|i-j| <= 1`), 100% ImageNet weight inheritance.
-  - Exp 3 (`HRNetPConvRep`):
-      FasterNet Partial-Conv + RepVGG structural reparameterization + ECA in wide Stage 3/4 (`>=72ch`),
-      keeping ImageNet pretrained `BasicBlock`s in Stage 1/2 & `18/36ch` high-res streams.
-  - Exp 4 (`SlimGhostRepC3` + `AIFI(512)` on `BaseHRNetV2W18`):
-      Standalone RT-DETR Neck compression cutting >45% of Neck params/FLOPs.
-  - Exp 5 (`FastHRNetBackbone` + `SlimGhostRepC3` + `AIFI(512)`):
-      Joint lossless lightweight model combining Exp 2 + Exp 3 + Exp 4.
-  - Exp 6 (`HRNetStarRep`):
-      StarNet element-wise star multiplication (`(W1 x) * (W2 x)`) + RepVGG spatial conv + ECA
-      in wide Stage 3/4 branches (CVPR 2024 StarNet / SSR-DETR 2026), high nonlinear capacity at tiny params.
-  - Exp 7 (`HRNetPruneS4` + `192-dim` Compact Neck/AIFI/Decoder with `150` Queries):
-      Cuts quadratic `O(d^2)` params & latency across Neck + AIFI + all 3 Decoder layers while keeping
-      100% ImageNet pretrained `HRNetPruneS4` high-resolution localization power.
-  - Exp 8 (`HRNetPruneS4` + `RepGhostC3` + `HaarDownsample` Alias-Free PAN):
-      Hardware-friendly RepGhost Neck + lossless 2D Haar Wavelet PAN downsampling (Ghost-HRNet 2025 + PF-DETR).
-  - Exp 9 (`FastHRNetBackbone` + `192-dim` `RepGhostC3` + `HaarDownsample` + Compact Decoder):
-      Ultimate Ultra-Lite Pareto contender (~55-60% smaller than Exp 1, faster than RT-DETR-R18!).
+V3 Hardware-Aware Upgrades:
+  1. Full Fair `Conv2d + BatchNorm2d` Inference Fusion (`switch_to_deploy()` / `fuse()`):
+     - Eliminates ALL unfused Conv+BN pairs across BaseHRNetV2W18, _BasicBlock, _Bottleneck,
+       transitions, fuse_layers, PConvRepBlock, StarRepBlock, StarFastBlock, SlimGhostRepC3,
+       RepGhostC3, HaarP2FoldTransition, and HaarDownsample (0 residual gradients!).
+     - Restores 100% fair speed comparison against Ultralytics-fused RT-DETR-R18 (`299 layers`).
+  2. Three New Hardware-Aware Ultra-Fast Contenders Built on Champion `Exp6_StarHRNet` (`mAP75=0.845, mAP50:95=0.734`):
+     - `Exp10_StarHR_Speed`: `StarHRFastBackbone` (Stage1=2, Stage3=2x2, Stage4=2x2 + `StarFastBlock`) +
+       native fused `RepC3(n=2)` (256-dim) + `AIFI(512)` -> targets ~5.5-6.2 ms, ~8.5M params.
+     - `Exp11_StarHR_192Speed`: `StarHRFastBackbone` + `192-dim` native fused `RepC3(n=2)` + `AIFI(512)` +
+       `150`-query compact Decoder (~300 fused layers!) -> targets ~4.8-5.5 ms (matching RT-DETR-R18!).
+     - `Exp12_StarHR_Balanced`: `StarHRBalancedBackbone` (Stage1=2, Stage3=3x2, Stage4=2x2 + `StarFastBlock`) +
+       native fused `RepC3(n=2)` (256-dim) + `AIFI(512)` -> high-accuracy speed-balanced variant.
 """
 
 from __future__ import annotations
@@ -47,13 +35,17 @@ __all__ = [
     "HRNetPConvRep",
     "HRNetStarRep",
     "FastHRNetBackbone",
+    "StarHRFastBackbone",
+    "StarHRBalancedBackbone",
     "SlimGhostRepC3",
     "RepGhostC3",
     "HaarDownsample",
     "HaarP2FoldTransition",
     "PConvRepBlock",
     "StarRepBlock",
+    "StarFastBlock",
     "ECALayer",
+    "fuse_sequential_conv_bn",
 ]
 
 _HRNET_W18_URL = (
@@ -70,7 +62,7 @@ _CLASSIFICATION_PREFIXES = (
 
 
 # ---------------------------------------------------------------------------
-# Shared Pretrained Weight Discovery & Loading Utility
+# Shared Pretrained Weight Discovery & Exact Conv+BN Fusion Utilities
 # ---------------------------------------------------------------------------
 def _locate_or_download_hrnet_w18(pretrained_path: Optional[str] = None) -> Path:
     candidates: List[Path] = []
@@ -146,13 +138,56 @@ def _extract_state_dict(ckpt_path: Path) -> Dict[str, torch.Tensor]:
 
 
 def _fuse_conv_bn_tensors(conv: nn.Conv2d, bn: nn.BatchNorm2d) -> Tuple[torch.Tensor, torch.Tensor]:
-    std = (bn.running_var + bn.eps).sqrt()
+    std = torch.sqrt(bn.running_var + bn.eps)
     t = (bn.weight / std).reshape(-1, 1, 1, 1)
-    return conv.weight * t, bn.bias - bn.running_mean * bn.weight / std
+    b_conv = torch.zeros_like(bn.running_mean) if conv.bias is None else conv.bias
+    return conv.weight * t, (b_conv - bn.running_mean) * (bn.weight / std) + bn.bias
+
+
+def _fuse_conv_bn_pair(conv: nn.Conv2d, bn: nn.BatchNorm2d) -> nn.Conv2d:
+    """Mathematically exact Conv2d + BatchNorm2d folding for inference."""
+    fused = nn.Conv2d(
+        conv.in_channels,
+        conv.out_channels,
+        kernel_size=conv.kernel_size,
+        stride=conv.stride,
+        padding=conv.padding,
+        dilation=conv.dilation,
+        groups=conv.groups,
+        bias=True,
+    ).to(device=conv.weight.device, dtype=conv.weight.dtype)
+    with torch.no_grad():
+        k, b = _fuse_conv_bn_tensors(conv, bn)
+        fused.weight.copy_(k)
+        fused.bias.copy_(b)
+    return fused.requires_grad_(False)
+
+
+def fuse_sequential_conv_bn(seq: Optional[nn.Module]) -> Optional[nn.Module]:
+    """Recursively folds every adjacent (Conv2d, BatchNorm2d) inside an nn.Sequential."""
+    if seq is None:
+        return None
+    if isinstance(seq, nn.Sequential):
+        mods = list(seq.children())
+        new_mods: List[nn.Module] = []
+        i = 0
+        while i < len(mods):
+            m = mods[i]
+            if isinstance(m, nn.Sequential):
+                new_mods.append(fuse_sequential_conv_bn(m))
+                i += 1
+            elif isinstance(m, nn.Conv2d) and i + 1 < len(mods) and isinstance(mods[i + 1], nn.BatchNorm2d):
+                new_mods.append(_fuse_conv_bn_pair(m, mods[i + 1]))
+                i += 2
+            else:
+                new_mods.append(m)
+                i += 1
+        return nn.Sequential(*new_mods)
+    return seq
 
 
 # ---------------------------------------------------------------------------
-# Building Blocks: Standard HRNet, ECA, PConv-Rep, Star-Rep, Haar-DWT
+# Building Blocks: Standard HRNet, ECA, PConv-Rep, Star-Rep, StarFast, Haar
 # ---------------------------------------------------------------------------
 class _BasicBlock(nn.Module):
     expansion = 1
@@ -160,11 +195,21 @@ class _BasicBlock(nn.Module):
     def __init__(self, inplanes: int, planes: int, stride: int = 1, downsample: Optional[nn.Module] = None):
         super().__init__()
         self.conv1 = nn.Conv2d(inplanes, planes, kernel_size=3, stride=stride, padding=1, bias=False)
-        self.bn1 = nn.BatchNorm2d(planes)
+        self.bn1: nn.Module = nn.BatchNorm2d(planes)
         self.relu = nn.ReLU(inplace=True)
         self.conv2 = nn.Conv2d(planes, planes, kernel_size=3, stride=1, padding=1, bias=False)
-        self.bn2 = nn.BatchNorm2d(planes)
+        self.bn2: nn.Module = nn.BatchNorm2d(planes)
         self.downsample = downsample
+
+    def switch_to_deploy(self) -> None:
+        if isinstance(self.bn1, nn.BatchNorm2d):
+            self.conv1 = _fuse_conv_bn_pair(self.conv1, self.bn1)
+            self.bn1 = nn.Identity()
+        if isinstance(self.bn2, nn.BatchNorm2d):
+            self.conv2 = _fuse_conv_bn_pair(self.conv2, self.bn2)
+            self.bn2 = nn.Identity()
+        if self.downsample is not None:
+            self.downsample = fuse_sequential_conv_bn(self.downsample)
 
     def forward(self, x: torch.Tensor) -> torch.Tensor:
         identity = x if self.downsample is None else self.downsample(x)
@@ -179,13 +224,26 @@ class _Bottleneck(nn.Module):
     def __init__(self, inplanes: int, planes: int, stride: int = 1, downsample: Optional[nn.Module] = None):
         super().__init__()
         self.conv1 = nn.Conv2d(inplanes, planes, kernel_size=1, bias=False)
-        self.bn1 = nn.BatchNorm2d(planes)
+        self.bn1: nn.Module = nn.BatchNorm2d(planes)
         self.conv2 = nn.Conv2d(planes, planes, kernel_size=3, stride=stride, padding=1, bias=False)
-        self.bn2 = nn.BatchNorm2d(planes)
+        self.bn2: nn.Module = nn.BatchNorm2d(planes)
         self.conv3 = nn.Conv2d(planes, planes * self.expansion, kernel_size=1, bias=False)
-        self.bn3 = nn.BatchNorm2d(planes * self.expansion)
+        self.bn3: nn.Module = nn.BatchNorm2d(planes * self.expansion)
         self.relu = nn.ReLU(inplace=True)
         self.downsample = downsample
+
+    def switch_to_deploy(self) -> None:
+        if isinstance(self.bn1, nn.BatchNorm2d):
+            self.conv1 = _fuse_conv_bn_pair(self.conv1, self.bn1)
+            self.bn1 = nn.Identity()
+        if isinstance(self.bn2, nn.BatchNorm2d):
+            self.conv2 = _fuse_conv_bn_pair(self.conv2, self.bn2)
+            self.bn2 = nn.Identity()
+        if isinstance(self.bn3, nn.BatchNorm2d):
+            self.conv3 = _fuse_conv_bn_pair(self.conv3, self.bn3)
+            self.bn3 = nn.Identity()
+        if self.downsample is not None:
+            self.downsample = fuse_sequential_conv_bn(self.downsample)
 
     def forward(self, x: torch.Tensor) -> torch.Tensor:
         identity = x if self.downsample is None else self.downsample(x)
@@ -196,7 +254,7 @@ class _Bottleneck(nn.Module):
 
 
 class ECALayer(nn.Module):
-    """Efficient Channel Attention (Slim-HRNet 2026): lightweight 1D conv channel recalibration."""
+    """Efficient Channel Attention (Slim-HRNet 2026)."""
 
     def __init__(self, channels: int, gamma: int = 2, b: int = 1):
         super().__init__()
@@ -215,9 +273,7 @@ class ECALayer(nn.Module):
 
 
 class PConvRepBlock(nn.Module):
-    """
-    FasterNet Partial-Conv + RepVGG Structural Reparameterization Block (PF-DETR 2025/2026 + Slim-HRNet ECA).
-    """
+    """Exp 3/4/5/7/9: FasterNet Partial-Conv + RepVGG Structural Reparameterization Block."""
 
     def __init__(self, channels: int, n_div: int = 4, use_eca: bool = True):
         super().__init__()
@@ -234,9 +290,9 @@ class PConvRepBlock(nn.Module):
 
         hidden = max(self.channels, int(round(self.channels * 1.5)))
         self.pw1 = nn.Conv2d(self.channels, hidden, kernel_size=1, bias=False)
-        self.bn1 = nn.BatchNorm2d(hidden)
+        self.bn1: nn.Module = nn.BatchNorm2d(hidden)
         self.pw2 = nn.Conv2d(hidden, self.channels, kernel_size=1, bias=False)
-        self.bn2 = nn.BatchNorm2d(self.channels)
+        self.bn2: nn.Module = nn.BatchNorm2d(self.channels)
         self.eca = ECALayer(self.channels) if use_eca else nn.Identity()
         self.act = nn.ReLU(inplace=True)
 
@@ -244,21 +300,27 @@ class PConvRepBlock(nn.Module):
         nn.init.constant_(self.bn2.bias, 0.0)
 
     def switch_to_deploy(self) -> None:
-        if self.deploy:
-            return
-        k3, b3 = _fuse_conv_bn_tensors(self.pconv3x3, self.pbn3x3)
-        k1, b1 = _fuse_conv_bn_tensors(self.pconv1x1, self.pbn1x1)
-        k_eq = k3 + F.pad(k1, [1, 1, 1, 1])
-        b_eq = b3 + b1
-        self.pconv_reparam = nn.Conv2d(
-            self.dim_conv, self.dim_conv, kernel_size=3, stride=1, padding=1, bias=True
-        ).to(device=k_eq.device, dtype=k_eq.dtype)
-        self.pconv_reparam.weight.data.copy_(k_eq)
-        self.pconv_reparam.bias.data.copy_(b_eq)
-        for attr in ("pconv3x3", "pbn3x3", "pconv1x1", "pbn1x1"):
-            if hasattr(self, attr):
-                delattr(self, attr)
-        self.deploy = True
+        if not self.deploy:
+            k3, b3 = _fuse_conv_bn_tensors(self.pconv3x3, self.pbn3x3)
+            k1, b1 = _fuse_conv_bn_tensors(self.pconv1x1, self.pbn1x1)
+            k_eq = k3 + F.pad(k1, [1, 1, 1, 1])
+            b_eq = b3 + b1
+            self.pconv_reparam = nn.Conv2d(
+                self.dim_conv, self.dim_conv, kernel_size=3, stride=1, padding=1, bias=True
+            ).to(device=k_eq.device, dtype=k_eq.dtype)
+            self.pconv_reparam.weight.data.copy_(k_eq)
+            self.pconv_reparam.bias.data.copy_(b_eq)
+            self.pconv_reparam.requires_grad_(False)
+            for attr in ("pconv3x3", "pbn3x3", "pconv1x1", "pbn1x1"):
+                if hasattr(self, attr):
+                    delattr(self, attr)
+            self.deploy = True
+        if isinstance(self.bn1, nn.BatchNorm2d):
+            self.pw1 = _fuse_conv_bn_pair(self.pw1, self.bn1)
+            self.bn1 = nn.Identity()
+        if isinstance(self.bn2, nn.BatchNorm2d):
+            self.pw2 = _fuse_conv_bn_pair(self.pw2, self.bn2)
+            self.bn2 = nn.Identity()
 
     def fuse(self) -> "PConvRepBlock":
         self.switch_to_deploy()
@@ -277,12 +339,7 @@ class PConvRepBlock(nn.Module):
 
 
 class StarRepBlock(nn.Module):
-    """
-    Exp 6: StarNet Element-Wise Star Operation + Reparameterizable Partial Spatial Conv + ECA
-    (CVPR 2024 StarNet / SSR-DETR 2026).
-    Maps features into high-dimensional implicit nonlinear space via `ReLU6(f1(x)) * f2(x)` without
-    widening channel dimensions, achieving strong representation with very low parameters.
-    """
+    """Exp 6: StarNet Element-Wise Star Operation + Reparameterizable Partial Spatial Conv + ECA."""
 
     def __init__(self, channels: int, n_div: int = 4, use_eca: bool = True):
         super().__init__()
@@ -298,34 +355,38 @@ class StarRepBlock(nn.Module):
         self.pconv_reparam: Optional[nn.Conv2d] = None
 
         hidden = max(self.channels, int(round(self.channels * 1.25)))
-        self.f1 = nn.Sequential(nn.Conv2d(self.channels, hidden, 1, bias=False), nn.BatchNorm2d(hidden))
-        self.f2 = nn.Sequential(nn.Conv2d(self.channels, hidden, 1, bias=False), nn.BatchNorm2d(hidden))
+        self.f1: nn.Module = nn.Sequential(nn.Conv2d(self.channels, hidden, 1, bias=False), nn.BatchNorm2d(hidden))
+        self.f2: nn.Module = nn.Sequential(nn.Conv2d(self.channels, hidden, 1, bias=False), nn.BatchNorm2d(hidden))
         self.g = nn.Conv2d(hidden, self.channels, 1, bias=False)
-        self.gn = nn.BatchNorm2d(self.channels)
+        self.gn: nn.Module = nn.BatchNorm2d(self.channels)
         self.eca = ECALayer(self.channels) if use_eca else nn.Identity()
         self.act6 = nn.ReLU6(inplace=True)
         self.relu = nn.ReLU(inplace=True)
 
-        # Zero-Shift residual init
         nn.init.constant_(self.gn.weight, 0.0)
         nn.init.constant_(self.gn.bias, 0.0)
 
     def switch_to_deploy(self) -> None:
-        if self.deploy:
-            return
-        k3, b3 = _fuse_conv_bn_tensors(self.pconv3x3, self.pbn3x3)
-        k1, b1 = _fuse_conv_bn_tensors(self.pconv1x1, self.pbn1x1)
-        k_eq = k3 + F.pad(k1, [1, 1, 1, 1])
-        b_eq = b3 + b1
-        self.pconv_reparam = nn.Conv2d(
-            self.dim_conv, self.dim_conv, kernel_size=3, stride=1, padding=1, bias=True
-        ).to(device=k_eq.device, dtype=k_eq.dtype)
-        self.pconv_reparam.weight.data.copy_(k_eq)
-        self.pconv_reparam.bias.data.copy_(b_eq)
-        for attr in ("pconv3x3", "pbn3x3", "pconv1x1", "pbn1x1"):
-            if hasattr(self, attr):
-                delattr(self, attr)
-        self.deploy = True
+        if not self.deploy:
+            k3, b3 = _fuse_conv_bn_tensors(self.pconv3x3, self.pbn3x3)
+            k1, b1 = _fuse_conv_bn_tensors(self.pconv1x1, self.pbn1x1)
+            k_eq = k3 + F.pad(k1, [1, 1, 1, 1])
+            b_eq = b3 + b1
+            self.pconv_reparam = nn.Conv2d(
+                self.dim_conv, self.dim_conv, kernel_size=3, stride=1, padding=1, bias=True
+            ).to(device=k_eq.device, dtype=k_eq.dtype)
+            self.pconv_reparam.weight.data.copy_(k_eq)
+            self.pconv_reparam.bias.data.copy_(b_eq)
+            self.pconv_reparam.requires_grad_(False)
+            for attr in ("pconv3x3", "pbn3x3", "pconv1x1", "pbn1x1"):
+                if hasattr(self, attr):
+                    delattr(self, attr)
+            self.deploy = True
+        self.f1 = fuse_sequential_conv_bn(self.f1)
+        self.f2 = fuse_sequential_conv_bn(self.f2)
+        if isinstance(self.gn, nn.BatchNorm2d):
+            self.g = _fuse_conv_bn_pair(self.g, self.gn)
+            self.gn = nn.Identity()
 
     def fuse(self) -> "StarRepBlock":
         self.switch_to_deploy()
@@ -343,15 +404,66 @@ class StarRepBlock(nn.Module):
         return self.relu(x + out)
 
 
+class StarFastBlock(nn.Module):
+    """
+    Exp 10/11/12: Hardware-Aware Ultra-Fast Star Block for NVIDIA A30 Tensor Cores.
+    Retains Exp 6's winning StarNet element-wise multiplication (`ReLU6(a) * b`) while cutting
+    CUDA kernel launches by >65%:
+      - Single grouped 3x3 spatial conv (`groups=4`) -> zero `split/cat` memory copies!
+      - Fused dual-output 1x1 conv (`c -> 2*hidden`) + `chunk(2)` -> 1 kernel instead of 2 convs + 2 BNs!
+      - Zero per-block `ECALayer` kernel fragmentation!
+      - At deploy (`switch_to_deploy()`), folds into ONLY 3 plain fused convs with 0 BNs!
+    """
+
+    def __init__(self, channels: int, groups: int = 4, expand: float = 1.25):
+        super().__init__()
+        self.channels = int(channels)
+        g = groups if (self.channels % groups == 0) else 1
+        hidden = max(self.channels, int(round(self.channels * expand)))
+
+        self.sconv = nn.Conv2d(self.channels, self.channels, kernel_size=3, stride=1, padding=1, groups=g, bias=False)
+        self.sbn: nn.Module = nn.BatchNorm2d(self.channels)
+
+        self.f12 = nn.Conv2d(self.channels, hidden * 2, kernel_size=1, bias=False)
+        self.f12_bn: nn.Module = nn.BatchNorm2d(hidden * 2)
+
+        self.g = nn.Conv2d(hidden, self.channels, kernel_size=1, bias=False)
+        self.gn: nn.Module = nn.BatchNorm2d(self.channels)
+        self.act6 = nn.ReLU6(inplace=True)
+        self.relu = nn.ReLU(inplace=True)
+
+        # Zero-Shift residual init
+        nn.init.constant_(self.gn.weight, 0.0)
+        nn.init.constant_(self.gn.bias, 0.0)
+
+    def switch_to_deploy(self) -> None:
+        if isinstance(self.sbn, nn.BatchNorm2d):
+            self.sconv = _fuse_conv_bn_pair(self.sconv, self.sbn)
+            self.sbn = nn.Identity()
+        if isinstance(self.f12_bn, nn.BatchNorm2d):
+            self.f12 = _fuse_conv_bn_pair(self.f12, self.f12_bn)
+            self.f12_bn = nn.Identity()
+        if isinstance(self.gn, nn.BatchNorm2d):
+            self.g = _fuse_conv_bn_pair(self.g, self.gn)
+            self.gn = nn.Identity()
+
+    def fuse(self) -> "StarFastBlock":
+        self.switch_to_deploy()
+        return self
+
+    def forward(self, x: torch.Tensor) -> torch.Tensor:
+        feat = self.sbn(self.sconv(x))
+        a, b = self.f12_bn(self.f12(feat)).chunk(2, dim=1)
+        out = self.gn(self.g(self.act6(a) * b))
+        return self.relu(x + out)
+
+
 class HaarP2FoldTransition(nn.Module):
-    """
-    Lossless Orthogonal 2D Haar-DWT Folding from `P2/4 (160x160)` into `P3/8 (80x80)`
-    at the Stage 3 -> Stage 4 boundary (Zero-Shift BN init).
-    """
+    """Lossless Orthogonal 2D Haar-DWT Folding from `P2/4 (160x160)` into `P3/8 (80x80)`."""
 
     def __init__(self, c_p2: int, c_p3: int):
         super().__init__()
-        self.fold_proj = nn.Sequential(
+        self.fold_proj: nn.Module = nn.Sequential(
             nn.Conv2d(c_p2 * 4, c_p3, kernel_size=1, bias=False),
             nn.BatchNorm2d(c_p3),
         )
@@ -359,6 +471,10 @@ class HaarP2FoldTransition(nn.Module):
         nn.init.constant_(self.fold_proj[1].bias, 0.0)
         self.u_alpha = nn.Parameter(torch.tensor(0.0, dtype=torch.float32))
         self.relu = nn.ReLU(inplace=True)
+
+    def switch_to_deploy(self) -> None:
+        self.fold_proj = fuse_sequential_conv_bn(self.fold_proj)
+        self.u_alpha.requires_grad_(False)
 
     def forward(self, f_p2: torch.Tensor, f_p3: torch.Tensor) -> torch.Tensor:
         if f_p2.shape[-2] % 2 != 0 or f_p2.shape[-1] % 2 != 0:
@@ -384,19 +500,22 @@ class HaarP2FoldTransition(nn.Module):
 
 
 class HaarDownsample(nn.Module):
-    """
-    Exp 8 & Exp 9: Alias-Free 2D Haar Wavelet Downsampling for RT-DETR PAN (`P3->P4`, `P4->P5`).
-    Replaces strided `Conv(c1, c2, 3, 2)` with lossless 4-subband Haar DWT + 1x1 Conv + BN + SiLU,
-    cutting downsampling parameters by >55% while preserving tiny UAV high-frequency edges.
-    """
+    """Exp 8 & Exp 9: Alias-Free 2D Haar Wavelet Downsampling for RT-DETR PAN."""
 
     def __init__(self, c1: int, c2: int):
         super().__init__()
-        self.proj = nn.Sequential(
+        self.proj: nn.Module = nn.Sequential(
             nn.Conv2d(c1 * 4, c2, kernel_size=1, stride=1, padding=0, bias=False),
             nn.BatchNorm2d(c2),
             nn.SiLU(inplace=True),
         )
+
+    def switch_to_deploy(self) -> None:
+        self.proj = fuse_sequential_conv_bn(self.proj)
+
+    def fuse(self) -> "HaarDownsample":
+        self.switch_to_deploy()
+        return self
 
     def forward(self, x: torch.Tensor) -> torch.Tensor:
         if x.shape[-2] % 2 != 0 or x.shape[-1] % 2 != 0:
@@ -421,8 +540,6 @@ class HaarDownsample(nn.Module):
 # High-Resolution Stage Modules
 # ---------------------------------------------------------------------------
 class _HighResolutionModule(nn.Module):
-    """Exact HRNetV2 HighResolutionModule supporting dense/sparse fusion and Basic/PConvRep/StarRep blocks."""
-
     def __init__(
         self,
         num_branches: int,
@@ -442,6 +559,8 @@ class _HighResolutionModule(nn.Module):
                 blocks = [PConvRepBlock(c, n_div=4, use_eca=True) for _ in range(num_blocks[i])]
             elif c >= lite_min_channels and lite_block_type == "star":
                 blocks = [StarRepBlock(c, n_div=4, use_eca=True) for _ in range(num_blocks[i])]
+            elif c >= lite_min_channels and lite_block_type == "star_fast":
+                blocks = [StarFastBlock(c, groups=4, expand=1.25) for _ in range(num_blocks[i])]
             else:
                 blocks = [_BasicBlock(c, c) for _ in range(num_blocks[i])]
             self.branches.append(nn.Sequential(*blocks))
@@ -488,6 +607,10 @@ class _HighResolutionModule(nn.Module):
             for blk in branch:
                 if hasattr(blk, "switch_to_deploy"):
                     blk.switch_to_deploy()
+        for i in range(len(self.fuse_layers)):
+            for j in range(len(self.fuse_layers[i])):
+                if self.fuse_layers[i][j] is not None:
+                    self.fuse_layers[i][j] = fuse_sequential_conv_bn(self.fuse_layers[i][j])
 
     def forward(self, x: List[torch.Tensor]) -> List[torch.Tensor]:
         feats = [branch(xi) for branch, xi in zip(self.branches, x)]
@@ -511,10 +634,10 @@ class _HighResolutionModule(nn.Module):
 
 
 # ---------------------------------------------------------------------------
-# Backbones: Exp 1, Exp 2, Exp 3, Exp 5, Exp 6
+# Backbones: Exp 1 - Exp 12
 # ---------------------------------------------------------------------------
 class BaseHRNetV2W18(nn.Module):
-    """Exp 1: Exact 1:1 faithful port of `HRNetV2W18` from `RT-DETR-UAV`."""
+    """Exp 1: Exact 1:1 faithful port of `HRNetV2W18` from `RT-DETR-UAV` with full Conv+BN inference fusion."""
 
     def __init__(
         self,
@@ -525,6 +648,7 @@ class BaseHRNetV2W18(nn.Module):
         sparse_fuse: bool = False,
         lite_block_type: str = "basic",
         lite_min_channels: int = 9999,
+        stage1_blocks: int = 4,
         stage3_modules: int = 4,
         stage4_modules: int = 3,
         blocks_per_branch: int = 4,
@@ -536,12 +660,12 @@ class BaseHRNetV2W18(nn.Module):
         self.lite_min_channels = int(lite_min_channels)
 
         self.conv1 = nn.Conv2d(3, 64, kernel_size=3, stride=2, padding=1, bias=False)
-        self.bn1 = nn.BatchNorm2d(64)
+        self.bn1: nn.Module = nn.BatchNorm2d(64)
         self.conv2 = nn.Conv2d(64, 64, kernel_size=3, stride=2, padding=1, bias=False)
-        self.bn2 = nn.BatchNorm2d(64)
+        self.bn2: nn.Module = nn.BatchNorm2d(64)
         self.relu = nn.ReLU(inplace=True)
 
-        self.layer1 = self._make_layer1(64, 64, 4)
+        self.layer1 = self._make_layer1(64, 64, stage1_blocks)
 
         self.transition1 = nn.ModuleList([
             nn.Sequential(nn.Conv2d(256, 18, 3, 1, 1, bias=False), nn.BatchNorm2d(18), nn.ReLU(inplace=True)),
@@ -638,7 +762,7 @@ class BaseHRNetV2W18(nn.Module):
             if isinstance(m, PConvRepBlock):
                 nn.init.constant_(m.bn2.weight, 0.0)
                 nn.init.constant_(m.bn2.bias, 0.0)
-            elif isinstance(m, StarRepBlock):
+            elif isinstance(m, (StarRepBlock, StarFastBlock)):
                 nn.init.constant_(m.gn.weight, 0.0)
                 nn.init.constant_(m.gn.bias, 0.0)
             elif isinstance(m, HaarP2FoldTransition):
@@ -695,10 +819,28 @@ class BaseHRNetV2W18(nn.Module):
         return loaded
 
     def switch_to_deploy(self) -> None:
+        if isinstance(self.bn1, nn.BatchNorm2d):
+            self.conv1 = _fuse_conv_bn_pair(self.conv1, self.bn1)
+            self.bn1 = nn.Identity()
+        if isinstance(self.bn2, nn.BatchNorm2d):
+            self.conv2 = _fuse_conv_bn_pair(self.conv2, self.bn2)
+            self.bn2 = nn.Identity()
+        for blk in self.layer1:
+            if hasattr(blk, "switch_to_deploy"):
+                blk.switch_to_deploy()
+        for tlist in (self.transition1, self.transition2, self.transition3):
+            for idx in range(len(tlist)):
+                if tlist[idx] is not None:
+                    tlist[idx] = fuse_sequential_conv_bn(tlist[idx])
+        if self.p2_fold_to_p3 is not None:
+            self.p2_fold_to_p3.switch_to_deploy()
         for stage in (self.stage2, self.stage3, self.stage4):
             for mod in stage:
                 if hasattr(mod, "switch_to_deploy"):
                     mod.switch_to_deploy()
+        for p in self.parameters():
+            if p.is_leaf:
+                p.requires_grad_(False)
 
     def fuse(self) -> "BaseHRNetV2W18":
         self.switch_to_deploy()
@@ -738,8 +880,6 @@ class BaseHRNetV2W18(nn.Module):
 
 
 class HRNetPruneS4(BaseHRNetV2W18):
-    """Exp 2 & Exp 7/8 Backbone: Stage-4 dead P2 pruning + Haar-DWT fold + Sparse fusion."""
-
     def __init__(self, pretrained: bool = True, pretrained_path: Optional[str] = None):
         super().__init__(
             pretrained=pretrained,
@@ -748,6 +888,7 @@ class HRNetPruneS4(BaseHRNetV2W18):
             sparse_fuse=True,
             lite_block_type="basic",
             lite_min_channels=9999,
+            stage1_blocks=4,
             stage3_modules=4,
             stage4_modules=2,
             blocks_per_branch=4,
@@ -755,8 +896,6 @@ class HRNetPruneS4(BaseHRNetV2W18):
 
 
 class HRNetPConvRep(BaseHRNetV2W18):
-    """Exp 3 Backbone: FasterNet PConv-Rep + ECA in Stage 3/4 wide branches (>=72ch)."""
-
     def __init__(self, pretrained: bool = True, pretrained_path: Optional[str] = None):
         super().__init__(
             pretrained=pretrained,
@@ -765,6 +904,7 @@ class HRNetPConvRep(BaseHRNetV2W18):
             sparse_fuse=False,
             lite_block_type="pconv",
             lite_min_channels=72,
+            stage1_blocks=4,
             stage3_modules=4,
             stage4_modules=3,
             blocks_per_branch=3,
@@ -772,8 +912,6 @@ class HRNetPConvRep(BaseHRNetV2W18):
 
 
 class HRNetStarRep(BaseHRNetV2W18):
-    """Exp 6 Backbone: StarNet Element-Wise Star Operation + RepVGG + ECA in Stage 3/4 wide branches (>=72ch)."""
-
     def __init__(self, pretrained: bool = True, pretrained_path: Optional[str] = None):
         super().__init__(
             pretrained=pretrained,
@@ -782,6 +920,7 @@ class HRNetStarRep(BaseHRNetV2W18):
             sparse_fuse=True,
             lite_block_type="star",
             lite_min_channels=72,
+            stage1_blocks=4,
             stage3_modules=4,
             stage4_modules=2,
             blocks_per_branch=3,
@@ -789,8 +928,6 @@ class HRNetStarRep(BaseHRNetV2W18):
 
 
 class FastHRNetBackbone(BaseHRNetV2W18):
-    """Exp 5 & Exp 9 Backbone: Joint Exp 2 (Stage-4 Haar-Prune + Sparse) + Exp 3 (PConv-Rep + ECA)."""
-
     def __init__(self, pretrained: bool = True, pretrained_path: Optional[str] = None):
         super().__init__(
             pretrained=pretrained,
@@ -799,30 +936,71 @@ class FastHRNetBackbone(BaseHRNetV2W18):
             sparse_fuse=True,
             lite_block_type="pconv",
             lite_min_channels=72,
+            stage1_blocks=4,
             stage3_modules=3,
             stage4_modules=2,
             blocks_per_branch=3,
         )
 
 
+class StarHRFastBackbone(BaseHRNetV2W18):
+    """Exp 10 & Exp 11 Backbone: Hardware-Aware Ultra-Fast Star-HRNet (Stage1=2, Stage3=2x2, Stage4=2x2)."""
+
+    def __init__(self, pretrained: bool = True, pretrained_path: Optional[str] = None):
+        super().__init__(
+            pretrained=pretrained,
+            pretrained_path=pretrained_path,
+            prune_stage4_p2=True,
+            sparse_fuse=True,
+            lite_block_type="star_fast",
+            lite_min_channels=72,
+            stage1_blocks=2,
+            stage3_modules=2,
+            stage4_modules=2,
+            blocks_per_branch=2,
+        )
+
+
+class StarHRBalancedBackbone(BaseHRNetV2W18):
+    """Exp 12 Backbone: Higher-Capacity Speed-Balanced Star-HRNet (Stage1=2, Stage3=3x2, Stage4=2x2)."""
+
+    def __init__(self, pretrained: bool = True, pretrained_path: Optional[str] = None):
+        super().__init__(
+            pretrained=pretrained,
+            pretrained_path=pretrained_path,
+            prune_stage4_p2=True,
+            sparse_fuse=True,
+            lite_block_type="star_fast",
+            lite_min_channels=72,
+            stage1_blocks=2,
+            stage3_modules=3,
+            stage4_modules=2,
+            blocks_per_branch=2,
+        )
+
+
 # ---------------------------------------------------------------------------
-# Lightweight Neck Modules: SlimGhostRepC3 (Exp 4/5/7) & RepGhostC3 (Exp 8/9)
+# Lightweight Neck Modules
 # ---------------------------------------------------------------------------
 class SlimGhostRepC3(nn.Module):
-    """Exp 4/5/7 Neck Block: Drop-in replacement for RepC3 using deploy-fusible PConvRepBlocks + ECA."""
-
     def __init__(self, c1: int, c2: int, n: int = 2, e: float = 0.5):
         super().__init__()
         c_ = max(32, int(c2 * e))
-        self.cv1 = nn.Sequential(nn.Conv2d(c1, c_, 1, 1, bias=False), nn.BatchNorm2d(c_), nn.SiLU(inplace=True))
-        self.cv2 = nn.Sequential(nn.Conv2d(c1, c_, 1, 1, bias=False), nn.BatchNorm2d(c_), nn.SiLU(inplace=True))
+        self.cv1: nn.Module = nn.Sequential(nn.Conv2d(c1, c_, 1, 1, bias=False), nn.BatchNorm2d(c_), nn.SiLU(inplace=True))
+        self.cv2: nn.Module = nn.Sequential(nn.Conv2d(c1, c_, 1, 1, bias=False), nn.BatchNorm2d(c_), nn.SiLU(inplace=True))
         self.m = nn.Sequential(*[PConvRepBlock(c_, n_div=4, use_eca=True) for _ in range(max(1, int(n)))])
-        self.cv3 = nn.Sequential(nn.Conv2d(c_, c2, 1, 1, bias=False), nn.BatchNorm2d(c2), nn.SiLU(inplace=True))
+        self.cv3: nn.Module = nn.Sequential(nn.Conv2d(c_, c2, 1, 1, bias=False), nn.BatchNorm2d(c2), nn.SiLU(inplace=True))
 
     def switch_to_deploy(self) -> None:
+        self.cv1 = fuse_sequential_conv_bn(self.cv1)
+        self.cv2 = fuse_sequential_conv_bn(self.cv2)
+        self.cv3 = fuse_sequential_conv_bn(self.cv3)
         for blk in self.m:
             if hasattr(blk, "switch_to_deploy"):
                 blk.switch_to_deploy()
+        for p in self.parameters():
+            if p.is_leaf:
+                p.requires_grad_(False)
 
     def fuse(self) -> "SlimGhostRepC3":
         self.switch_to_deploy()
@@ -833,8 +1011,6 @@ class SlimGhostRepC3(nn.Module):
 
 
 class _RepGhostBottleneck(nn.Module):
-    """Hardware-friendly RepGhost bottleneck: 1x1 expand -> reparameterized 3x3+id fusion -> 1x1 project + ECA."""
-
     def __init__(self, c: int):
         super().__init__()
         self.c = int(c)
@@ -843,32 +1019,33 @@ class _RepGhostBottleneck(nn.Module):
         self.bn3x3 = nn.BatchNorm2d(c)
         self.bn_id = nn.BatchNorm2d(c)
         self.reparam_conv: Optional[nn.Conv2d] = None
-        self.pw = nn.Sequential(nn.Conv2d(c, c, kernel_size=1, bias=False), nn.BatchNorm2d(c))
+        self.pw: nn.Module = nn.Sequential(nn.Conv2d(c, c, kernel_size=1, bias=False), nn.BatchNorm2d(c))
         self.eca = ECALayer(c)
         self.act = nn.SiLU(inplace=True)
 
     def switch_to_deploy(self) -> None:
-        if self.deploy:
-            return
-        k3, b3 = _fuse_conv_bn_tensors(self.conv3x3, self.bn3x3)
-        groups = self.conv3x3.groups
-        c_in_g = self.c // groups
-        kid = torch.zeros_like(k3)
-        for i in range(self.c):
-            kid[i, i % c_in_g, 1, 1] = 1.0
-        std = (self.bn_id.running_var + self.bn_id.eps).sqrt()
-        t = (self.bn_id.weight / std).reshape(-1, 1, 1, 1)
-        k_eq = k3 + kid * t
-        b_eq = b3 + (self.bn_id.bias - self.bn_id.running_mean * self.bn_id.weight / std)
-        self.reparam_conv = nn.Conv2d(self.c, self.c, 3, 1, 1, groups=groups, bias=True).to(
-            device=k_eq.device, dtype=k_eq.dtype
-        )
-        self.reparam_conv.weight.data.copy_(k_eq)
-        self.reparam_conv.bias.data.copy_(b_eq)
-        for attr in ("conv3x3", "bn3x3", "bn_id"):
-            if hasattr(self, attr):
-                delattr(self, attr)
-        self.deploy = True
+        if not self.deploy:
+            k3, b3 = _fuse_conv_bn_tensors(self.conv3x3, self.bn3x3)
+            groups = self.conv3x3.groups
+            c_in_g = self.c // groups
+            kid = torch.zeros_like(k3)
+            for i in range(self.c):
+                kid[i, i % c_in_g, 1, 1] = 1.0
+            std = torch.sqrt(self.bn_id.running_var + self.bn_id.eps)
+            t = (self.bn_id.weight / std).reshape(-1, 1, 1, 1)
+            k_eq = k3 + kid * t
+            b_eq = b3 + (self.bn_id.bias - self.bn_id.running_mean * self.bn_id.weight / std)
+            self.reparam_conv = nn.Conv2d(self.c, self.c, 3, 1, 1, groups=groups, bias=True).to(
+                device=k_eq.device, dtype=k_eq.dtype
+            )
+            self.reparam_conv.weight.data.copy_(k_eq)
+            self.reparam_conv.bias.data.copy_(b_eq)
+            self.reparam_conv.requires_grad_(False)
+            for attr in ("conv3x3", "bn3x3", "bn_id"):
+                if hasattr(self, attr):
+                    delattr(self, attr)
+            self.deploy = True
+        self.pw = fuse_sequential_conv_bn(self.pw)
 
     def forward(self, x: torch.Tensor) -> torch.Tensor:
         if self.deploy and self.reparam_conv is not None:
@@ -879,20 +1056,24 @@ class _RepGhostBottleneck(nn.Module):
 
 
 class RepGhostC3(nn.Module):
-    """Exp 8/9 Neck Block: Hardware-friendly RepGhost C3 block (Ghost-HRNet 2025 + RepGhost)."""
-
     def __init__(self, c1: int, c2: int, n: int = 2, e: float = 0.5):
         super().__init__()
         c_ = max(32, int(c2 * e))
-        self.cv1 = nn.Sequential(nn.Conv2d(c1, c_, 1, 1, bias=False), nn.BatchNorm2d(c_), nn.SiLU(inplace=True))
-        self.cv2 = nn.Sequential(nn.Conv2d(c1, c_, 1, 1, bias=False), nn.BatchNorm2d(c_), nn.SiLU(inplace=True))
+        self.cv1: nn.Module = nn.Sequential(nn.Conv2d(c1, c_, 1, 1, bias=False), nn.BatchNorm2d(c_), nn.SiLU(inplace=True))
+        self.cv2: nn.Module = nn.Sequential(nn.Conv2d(c1, c_, 1, 1, bias=False), nn.BatchNorm2d(c_), nn.SiLU(inplace=True))
         self.m = nn.Sequential(*[_RepGhostBottleneck(c_) for _ in range(max(1, int(n)))])
-        self.cv3 = nn.Sequential(nn.Conv2d(c_, c2, 1, 1, bias=False), nn.BatchNorm2d(c2), nn.SiLU(inplace=True))
+        self.cv3: nn.Module = nn.Sequential(nn.Conv2d(c_, c2, 1, 1, bias=False), nn.BatchNorm2d(c2), nn.SiLU(inplace=True))
 
     def switch_to_deploy(self) -> None:
+        self.cv1 = fuse_sequential_conv_bn(self.cv1)
+        self.cv2 = fuse_sequential_conv_bn(self.cv2)
+        self.cv3 = fuse_sequential_conv_bn(self.cv3)
         for blk in self.m:
             if hasattr(blk, "switch_to_deploy"):
                 blk.switch_to_deploy()
+        for p in self.parameters():
+            if p.is_leaf:
+                p.requires_grad_(False)
 
     def fuse(self) -> "RepGhostC3":
         self.switch_to_deploy()

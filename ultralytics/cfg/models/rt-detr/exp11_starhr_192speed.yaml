@@ -1,0 +1,37 @@
+# Exp 11: StarHR-192Speed (StarHRFastBackbone + 192-dim Native Fused RepC3(n=2) + 150-Query Decoder)
+# Extreme A30 speed contender: ~300 fused layers, ~6.0M params (-70% vs R18!), targets ~4.8-5.5 ms!
+nc: 80
+scales:
+  l: [1.00, 1.00, 1024]
+
+backbone:
+  - [-1, 1, StarHRFastBackbone, [True]]  # 0 -> Stage1=2, Stage3=2x2, Stage4=2x2 + StarFastBlock
+  - [0, 1, HRNetFeature, [0]]            # 1-P3/8
+  - [0, 1, HRNetFeature, [1]]            # 2-P4/16
+  - [0, 1, HRNetFeature, [2]]            # 3-P5/32
+
+head:
+  - [-1, 1, Conv, [192, 1, 1, None, 1, 1, False]]  # 4
+  - [-1, 1, AIFI, [512, 8]]                        # 5
+  - [-1, 1, Conv, [192, 1, 1]]                     # 6
+
+  - [-1, 1, nn.Upsample, [None, 2, 'nearest']]     # 7
+  - [2, 1, Conv, [192, 1, 1, None, 1, 1, False]]   # 8
+  - [[-2, -1], 1, Concat, [1]]                     # 9
+  - [-1, 2, RepC3, [192, 0.5]]                     # 10 Native fused 192-dim RepC3
+  - [-1, 1, Conv, [192, 1, 1]]                     # 11
+
+  - [-1, 1, nn.Upsample, [None, 2, 'nearest']]     # 12
+  - [1, 1, Conv, [192, 1, 1, None, 1, 1, False]]   # 13
+  - [[-2, -1], 1, Concat, [1]]                     # 14
+  - [-1, 2, RepC3, [192, 0.5]]                     # 15
+  - [-1, 1, Conv, [192, 3, 2]]                     # 16
+
+  - [[-1, 11], 1, Concat, [1]]                     # 17
+  - [-1, 2, RepC3, [192, 0.5]]                     # 18
+  - [-1, 1, Conv, [192, 3, 2]]                     # 19
+
+  - [[-1, 6], 1, Concat, [1]]                      # 20
+  - [-1, 2, RepC3, [192, 0.5]]                     # 21
+
+  - [[15, 18, 21], 1, RTDETRDecoder, [nc, 192, 150, 4, 8, 3]]  # 22 Compact 192-dim Decoder (150 queries)

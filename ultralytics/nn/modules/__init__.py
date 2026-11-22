@@ -98,12 +98,15 @@ from .hrnet_lite_suite import (
     HRNetPConvRep,
     HRNetStarRep,
     FastHRNetBackbone,
+    StarHRFastBackbone,
+    StarHRBalancedBackbone,
     SlimGhostRepC3,
     RepGhostC3,
     HaarDownsample,
     HaarP2FoldTransition,
     PConvRepBlock,
     StarRepBlock,
+    StarFastBlock,
     ECALayer,
 )
 # <<< [HRNET_LITE_SUITE_END] <<<

@@ -62,6 +62,9 @@ EXPERIMENT_MAP: Dict[str, str] = {
     "Exp7_Lite192Dec": str(REPO_ROOT / "ultralytics" / "cfg" / "models" / "rt-detr" / "exp7_hrnet_lite192_decoder.yaml"),
     "Exp8_RepGhostHaar": str(REPO_ROOT / "ultralytics" / "cfg" / "models" / "rt-detr" / "exp8_hrnet_repghost_haarneck.yaml"),
     "Exp9_UltraLite": str(REPO_ROOT / "ultralytics" / "cfg" / "models" / "rt-detr" / "exp9_ultralite_pareto.yaml"),
+    "Exp10_StarHR_Speed": str(REPO_ROOT / "ultralytics" / "cfg" / "models" / "rt-detr" / "exp10_starhr_speed.yaml"),
+    "Exp11_StarHR_192Speed": str(REPO_ROOT / "ultralytics" / "cfg" / "models" / "rt-detr" / "exp11_starhr_192speed.yaml"),
+    "Exp12_StarHR_Balanced": str(REPO_ROOT / "ultralytics" / "cfg" / "models" / "rt-detr" / "exp12_starhr_balanced.yaml"),
 }
 
 

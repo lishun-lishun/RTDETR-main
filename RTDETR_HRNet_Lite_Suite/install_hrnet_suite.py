@@ -1,8 +1,10 @@
 #!/usr/bin/env python3
 # -*- coding: utf-8 -*-
 """
-Idempotent Installer for `RTDETR_HRNet_Lite_Suite` (Exp 1 - Exp 9) into `RTDETR-main`.
-Integrates cleanly without modifying original `rtdetr-r18.yaml`, `hrnet.py`, or `rtdetr_hrnet_w18.yaml`.
+Idempotent Installer for `RTDETR_HRNet_Lite_Suite` (Exp 1 - Exp 12) into `RTDETR-main`.
+Includes a clean 3-line hook inside `BaseModel.fuse()` so Ultralytics `evaluate.py` / `val()`
+automatically runs full fair `Conv2d + BatchNorm2d` & structural reparameterization fusion
+across ALL models (Exp 1 - Exp 12) on equal footing with RT-DETR-R18!
 """
 
 import sys
@@ -22,10 +24,12 @@ from pathlib import Path
 
 SENTINEL_BEGIN = "# >>> [HRNET_LITE_SUITE_BEGIN] >>>"
 SENTINEL_END = "# <<< [HRNET_LITE_SUITE_END] <<<"
+FUSE_BEGIN = "# >>> [HRNET_LITE_FUSE_BEGIN] >>>"
+FUSE_END = "# <<< [HRNET_LITE_FUSE_END] <<<"
 
 
-def _strip(text):
-    return re.compile(rf"[ \t]*{re.escape(SENTINEL_BEGIN)}.*?{re.escape(SENTINEL_END)}[ \t]*\n?", re.DOTALL).sub("", text)
+def _strip(text, begin, end):
+    return re.compile(rf"[ \t]*{re.escape(begin)}.*?{re.escape(end)}[ \t]*\n?", re.DOTALL).sub("", text)
 
 
 def install(repo_path):
@@ -43,7 +47,7 @@ def install(repo_path):
         shutil.copy2(y, cfg_dst / y.name)
 
     init_file = repo_root / "ultralytics/nn/modules/__init__.py"
-    init_txt = _strip(init_file.read_text(encoding="utf-8")).rstrip() + "\n"
+    init_txt = _strip(init_file.read_text(encoding="utf-8"), SENTINEL_BEGIN, SENTINEL_END).rstrip() + "\n"
     init_block = f"""{SENTINEL_BEGIN}
 from .hrnet_lite_suite import (
     BaseHRNetV2W18,
@@ -51,12 +55,15 @@ from .hrnet_lite_suite import (
     HRNetPConvRep,
     HRNetStarRep,
     FastHRNetBackbone,
+    StarHRFastBackbone,
+    StarHRBalancedBackbone,
     SlimGhostRepC3,
     RepGhostC3,
     HaarDownsample,
     HaarP2FoldTransition,
     PConvRepBlock,
     StarRepBlock,
+    StarFastBlock,
     ECALayer,
 )
 {SENTINEL_END}
@@ -64,7 +71,8 @@ from .hrnet_lite_suite import (
     init_file.write_text(init_txt + init_block, encoding="utf-8")
 
     tasks_file = repo_root / "ultralytics/nn/tasks.py"
-    tasks_txt = _strip(tasks_file.read_text(encoding="utf-8")).lstrip()
+    tasks_txt = _strip(tasks_file.read_text(encoding="utf-8"), SENTINEL_BEGIN, SENTINEL_END)
+    tasks_txt = _strip(tasks_txt, FUSE_BEGIN, FUSE_END).lstrip()
 
     top_import = f"""{SENTINEL_BEGIN}
 from ultralytics.nn.modules.hrnet_lite_suite import (
@@ -73,6 +81,8 @@ from ultralytics.nn.modules.hrnet_lite_suite import (
     HRNetPConvRep,
     HRNetStarRep,
     FastHRNetBackbone,
+    StarHRFastBackbone,
+    StarHRBalancedBackbone,
     SlimGhostRepC3,
     RepGhostC3,
     HaarDownsample,
@@ -80,7 +90,7 @@ from ultralytics.nn.modules.hrnet_lite_suite import (
 {SENTINEL_END}
 """
     parse_snippet = f"""        {SENTINEL_BEGIN}
-        elif m in (BaseHRNetV2W18, HRNetPruneS4, HRNetPConvRep, HRNetStarRep, FastHRNetBackbone):
+        elif m in (BaseHRNetV2W18, HRNetPruneS4, HRNetPConvRep, HRNetStarRep, FastHRNetBackbone, StarHRFastBackbone, StarHRBalancedBackbone):
             m_ = m(*args)
             c2 = list(m_.out_channels)
             t = str(m)[8:-2].replace("__main__.", "")
@@ -112,22 +122,33 @@ from ultralytics.nn.modules.hrnet_lite_suite import (
         "        elif m in (RTDETRDecoder, UAVResearchDecoder, TinyUAVDecoder):",
         "        elif m is RTDETRDecoder:",
     ]
-    inserted = False
     for anchor in anchor_candidates:
         if anchor in tasks_txt:
             tasks_txt = tasks_txt.replace(anchor, parse_snippet + "\n" + anchor, 1)
-            inserted = True
             break
-    if not inserted:
-        print("[WARN] Could not locate parse_model anchor automatically; please register modules manually in tasks.py.")
+
+    # Patch BaseModel.fuse() so ALL custom modules fuse Conv+BN cleanly during val/test/predict
+    fuse_anchor = "        if not self.is_fused():"
+    fuse_snippet = f"""        {FUSE_BEGIN}
+        for _m in self.model.modules():
+            if hasattr(_m, "switch_to_deploy") and callable(_m.switch_to_deploy):
+                _m.switch_to_deploy()
+        for _p in self.parameters():
+            _p.requires_grad = False
+        {FUSE_END}"""
+    if fuse_anchor in tasks_txt:
+        tasks_txt = tasks_txt.replace(fuse_anchor, fuse_snippet + "\n" + fuse_anchor, 1)
+        print("[INFO] Hooked fair full Conv+BN fusion into `BaseModel.fuse()`.")
+    else:
+        print("[WARN] Could not locate `if not self.is_fused():` in tasks.py; manual fuse hook recommended.")
 
     tasks_file.write_text(top_import + tasks_txt, encoding="utf-8")
-    print(f"[SUCCESS] Installed RTDETR_HRNet_Lite_Suite (Exp1-Exp9) into {repo_root}")
+    print(f"[SUCCESS] Installed RTDETR_HRNet_Lite_Suite v3 (Exp1-Exp12 + Fair Full Fusion) into {repo_root}")
     return 0
 
 
 def main():
-    parser = argparse.ArgumentParser(description="Install RTDETR_HRNet_Lite_Suite (Exp1-Exp9) into RTDETR-main")
+    parser = argparse.ArgumentParser(description="Install RTDETR_HRNet_Lite_Suite v3 (Exp1-Exp12)")
     parser.add_argument("--repo", "--repo-root", type=str, default=".", help="Path to RTDETR-main")
     args = parser.parse_args()
     sys.exit(install(args.repo))

@@ -5,6 +5,8 @@ from ultralytics.nn.modules.hrnet_lite_suite import (
     HRNetPConvRep,
     HRNetStarRep,
     FastHRNetBackbone,
+    StarHRFastBackbone,
+    StarHRBalancedBackbone,
     SlimGhostRepC3,
     RepGhostC3,
     HaarDownsample,
@@ -191,6 +193,11 @@ class BaseModel(nn.Module):
         Returns:
             (nn.Module): The fused model is returned.
         """
+        # >>> [HRNET_LITE_FUSE_BEGIN] >>>
+        for _m in self.model.modules():
+            if hasattr(_m, "switch_to_deploy") and callable(_m.switch_to_deploy):
+                _m.switch_to_deploy()
+        # <<< [HRNET_LITE_FUSE_END] <<<
         if not self.is_fused():
             for m in self.model.modules():
                 if isinstance(m, (Conv, Conv2, DWConv)) and hasattr(m, 'bn'):
@@ -212,6 +219,8 @@ class BaseModel(nn.Module):
                     m.forward = m.forward_fuse  # update forward
                 if hasattr(m, 'switch_to_deploy'):
                     m.switch_to_deploy()
+            for p in self.parameters():
+                p.requires_grad = False
             self.info(verbose=verbose)
 
         return self
@@ -1078,7 +1087,7 @@ def parse_model(d, ch, verbose=True, warehouse_manager=None):  # model_dict, inp
         # <<< [UAV_PAPER_INNOVATIONS_END] <<<
         # >>> [RTHRNET_W18_BEGIN] >>>
         # >>> [HRNET_LITE_SUITE_BEGIN] >>>
-        elif m in (BaseHRNetV2W18, HRNetPruneS4, HRNetPConvRep, HRNetStarRep, FastHRNetBackbone):
+        elif m in (BaseHRNetV2W18, HRNetPruneS4, HRNetPConvRep, HRNetStarRep, FastHRNetBackbone, StarHRFastBackbone, StarHRBalancedBackbone):
             m_ = m(*args)
             c2 = list(m_.out_channels)
             t = str(m)[8:-2].replace("__main__.", "")

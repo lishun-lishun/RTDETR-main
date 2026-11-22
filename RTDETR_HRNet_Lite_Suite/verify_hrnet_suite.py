@@ -1,7 +1,7 @@
 #!/usr/bin/env python3
 # -*- coding: utf-8 -*-
 """
-Server-Side Verification & NVIDIA A30 Benchmark for `RTDETR_HRNet_Lite_Suite` (Exp 1 - Exp 9)
+Fair Fused Benchmark on NVIDIA A30 (FP16 batch=16 & FP32 batch=1) for Exp1, Exp6, Exp10, Exp11, Exp12
 """
 
 import sys
@@ -23,29 +23,42 @@ import torch
 
 SUITE_DIR = Path(__file__).resolve().parent
 REPO_ROOT = SUITE_DIR.parent
+os.environ.setdefault("YOLO_CONFIG_DIR", str(REPO_ROOT / ".yolo"))
+os.environ.setdefault("MPLCONFIGDIR", str(REPO_ROOT / ".yolo"))
 if (REPO_ROOT / "ultralytics").is_dir():
     sys.path.insert(0, str(REPO_ROOT))
+if (REPO_ROOT / ".pypkg").is_dir():
+    sys.path.insert(0, str(REPO_ROOT / ".pypkg"))
+for fallback_env in [
+    r'E:\envs\my_env\Lib\site-packages',
+    r'E:\envs\isaaclab\Lib\site-packages',
+    r'E:\envs\RareCLIP\Lib\site-packages',
+]:
+    if os.path.isdir(fallback_env):
+        sys.path.append(fallback_env)
 
 
-def benchmark_model(model, device, imgsz=640, warmup=20, iters=60):
-    model.eval().to(device)
-    x = torch.randn(1, 3, imgsz, imgsz, device=device)
+def benchmark(model, device, batch, half, imgsz=640, warmup=15, iters=40):
+    m = model.eval().to(device)
+    if half and device.type == "cuda":
+        m = m.half()
+    x = torch.randn(batch, 3, imgsz, imgsz, device=device, dtype=torch.float16 if (half and device.type == "cuda") else torch.float32)
     with torch.no_grad():
         for _ in range(warmup):
-            _ = model(x)
+            _ = m(x)
         if device.type == "cuda":
             torch.cuda.synchronize()
         t0 = time.perf_counter()
         for _ in range(iters):
-            _ = model(x)
+            _ = m(x)
         if device.type == "cuda":
             torch.cuda.synchronize()
-        dt = (time.perf_counter() - t0) / iters * 1000.0
-    return dt, 1000.0 / dt
+        ms_per_img = (time.perf_counter() - t0) / (iters * batch) * 1000.0
+    return ms_per_img
 
 
 def main():
-    parser = argparse.ArgumentParser(description="Verify & benchmark Exp1-Exp9 full RT-DETR models")
+    parser = argparse.ArgumentParser(description="Fair fused A30 benchmark for Exp1, Exp6, Exp10-Exp12")
     parser.add_argument("--pretrained-backbone", type=str, default="")
     parser.add_argument("--device", type=str, default="cuda:0")
     parser.add_argument("--imgsz", type=int, default=640)
@@ -59,14 +72,10 @@ def main():
 
     configs = [
         ("Exp1_BaseHRNet", SUITE_DIR / "configs" / "exp1_base_hrnet_w18.yaml"),
-        ("Exp2_PruneS4", SUITE_DIR / "configs" / "exp2_hrnet_prunes4.yaml"),
-        ("Exp3_PConvRep", SUITE_DIR / "configs" / "exp3_hrnet_pconvrep.yaml"),
-        ("Exp4_SlimNeck", SUITE_DIR / "configs" / "exp4_hrnet_slimneck.yaml"),
-        ("Exp5_FastHRFull", SUITE_DIR / "configs" / "exp5_fasthr_rtdetr_full.yaml"),
         ("Exp6_StarHRNet", SUITE_DIR / "configs" / "exp6_hrnet_starrep.yaml"),
-        ("Exp7_Lite192Dec", SUITE_DIR / "configs" / "exp7_hrnet_lite192_decoder.yaml"),
-        ("Exp8_RepGhostHaar", SUITE_DIR / "configs" / "exp8_hrnet_repghost_haarneck.yaml"),
-        ("Exp9_UltraLite", SUITE_DIR / "configs" / "exp9_ultralite_pareto.yaml"),
+        ("Exp10_StarHR_Speed", SUITE_DIR / "configs" / "exp10_starhr_speed.yaml"),
+        ("Exp11_StarHR_192Speed", SUITE_DIR / "configs" / "exp11_starhr_192speed.yaml"),
+        ("Exp12_StarHR_Balanced", SUITE_DIR / "configs" / "exp12_starhr_balanced.yaml"),
     ]
 
     rows = []
@@ -74,21 +83,20 @@ def main():
         print(f"\n========== Verifying {name} ==========")
         det = RTDETR(str(cfg))
         net = det.model
-        ema = copy.deepcopy(net)
-        assert ema is not net
-        params_train = sum(p.numel() for p in net.parameters()) / 1e6
+        assert copy.deepcopy(net) is not net
         net.fuse()
-        params_deploy = sum(p.numel() for p in net.parameters()) / 1e6
-        size_mb = params_deploy * 4.0
-        ms, fps = benchmark_model(net, device, imgsz=args.imgsz)
-        rows.append((name, params_train, params_deploy, size_mb, ms, fps))
+        deploy_params = sum(p.numel() for p in net.parameters()) / 1e6
+        grads = sum(p.numel() for p in net.parameters() if p.requires_grad)
+        ms_b16_fp16 = benchmark(copy.deepcopy(net), device, batch=16, half=True, imgsz=args.imgsz)
+        ms_b1_fp32 = benchmark(copy.deepcopy(net), device, batch=1, half=False, imgsz=args.imgsz)
+        rows.append((name, deploy_params, grads, ms_b16_fp16, ms_b1_fp32))
 
-    print("\n" + "=" * 88)
-    print(f"{'Experiment':<20} | {'Train Params':>12} | {'Deploy Params':>13} | {'FP32 Size':>9} | {'Latency':>9} | {'FPS':>7}")
-    print("-" * 88)
-    for name, pt, pd, mb, ms, fps in rows:
-        print(f"{name:<20} | {pt:>10.2f} M | {pd:>11.2f} M | {mb:>6.1f} MB | {ms:>6.2f} ms | {fps:>7.1f}")
-    print("=" * 88)
+    print("\n" + "=" * 92)
+    print(f"{'Experiment':<22} | {'Deploy Params':>13} | {'Grads':>6} | {'FP16 b16 (ms/img)':>17} | {'FP32 b1 (ms/img)':>16}")
+    print("-" * 92)
+    for name, pd, gr, m16, m1 in rows:
+        print(f"{name:<22} | {pd:>11.2f} M | {gr:>6d} | {m16:>14.2f} ms | {m1:>13.2f} ms")
+    print("=" * 92)
 
 
 if __name__ == "__main__":

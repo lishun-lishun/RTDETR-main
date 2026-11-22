@@ -1,10 +1,7 @@
 #!/usr/bin/env python3
 # -*- coding: utf-8 -*-
 """
-Fair Training Launcher for RT-DETR HRNet-W18 Lightweight Suite (Exp 1 - Exp 9)
-==============================================================================
-Aligns key hyperparameters with original `RT-DETR-UAV` (`mosaic=0.0`, ImageNet HRNetV2-W18
-pretrained backbone, AdamW + Cosine LR) for fair end-to-end comparison across all 9 experiments.
+Fair Training Launcher for RT-DETR HRNet-W18 Lightweight & Speed Suite (Exp 1 - Exp 12)
 """
 
 import sys
@@ -24,8 +21,19 @@ from pathlib import Path
 
 SUITE_DIR = Path(__file__).resolve().parent
 REPO_ROOT = SUITE_DIR.parent
+os.environ.setdefault("YOLO_CONFIG_DIR", str(REPO_ROOT / ".yolo"))
+os.environ.setdefault("MPLCONFIGDIR", str(REPO_ROOT / ".yolo"))
 if (REPO_ROOT / "ultralytics").is_dir():
     sys.path.insert(0, str(REPO_ROOT))
+if (REPO_ROOT / ".pypkg").is_dir():
+    sys.path.insert(0, str(REPO_ROOT / ".pypkg"))
+for fallback_env in [
+    r'E:\envs\my_env\Lib\site-packages',
+    r'E:\envs\isaaclab\Lib\site-packages',
+    r'E:\envs\RareCLIP\Lib\site-packages',
+]:
+    if os.path.isdir(fallback_env):
+        sys.path.append(fallback_env)
 
 EXP_CONFIGS = {
     "Exp1_BaseHRNet": str(SUITE_DIR / "configs" / "exp1_base_hrnet_w18.yaml"),
@@ -37,25 +45,28 @@ EXP_CONFIGS = {
     "Exp7_Lite192Dec": str(SUITE_DIR / "configs" / "exp7_hrnet_lite192_decoder.yaml"),
     "Exp8_RepGhostHaar": str(SUITE_DIR / "configs" / "exp8_hrnet_repghost_haarneck.yaml"),
     "Exp9_UltraLite": str(SUITE_DIR / "configs" / "exp9_ultralite_pareto.yaml"),
+    "Exp10_StarHR_Speed": str(SUITE_DIR / "configs" / "exp10_starhr_speed.yaml"),
+    "Exp11_StarHR_192Speed": str(SUITE_DIR / "configs" / "exp11_starhr_192speed.yaml"),
+    "Exp12_StarHR_Balanced": str(SUITE_DIR / "configs" / "exp12_starhr_balanced.yaml"),
 }
 
 
 def main():
-    parser = argparse.ArgumentParser(description="Fair Training Launcher for HRNet-Lite Suite (Exp1-Exp9)")
+    parser = argparse.ArgumentParser(description="Fair Training Launcher for HRNet-Lite Suite (Exp1-Exp12)")
     parser.add_argument("--exp", type=str, required=True, choices=list(EXP_CONFIGS.keys()))
     parser.add_argument("--data", type=str, default="dataset/DUT-Anti-UAV.yaml")
-    parser.add_argument("--pretrained-backbone", type=str, default="", help="Optional path to hrnetv2_w18-8cb57bb9.pth")
+    parser.add_argument("--pretrained-backbone", type=str, default="")
     parser.add_argument("--epochs", type=int, default=150)
     parser.add_argument("--batch", type=int, default=8)
     parser.add_argument("--micro-batch", type=int, default=8, help="Compatibility parameter for batch size")
     parser.add_argument("--imgsz", type=int, default=640)
     parser.add_argument("--lr0", type=float, default=0.0001)
-    parser.add_argument("--mosaic", type=float, default=0.0, help="Default 0.0 (matches original RT-DETR-UAV)")
+    parser.add_argument("--mosaic", type=float, default=0.0)
     parser.add_argument("--device", type=str, default="0")
     parser.add_argument("--seed", type=int, default=0)
     parser.add_argument("--workers", type=int, default=8)
     parser.add_argument("--project", type=str, default="runs/hrnet_lite_suite")
-    parser.add_argument("--execute", action="store_true", help="Launch actual GPU training (omit for dry-run)")
+    parser.add_argument("--execute", action="store_true")
     args = parser.parse_args()
 
     if args.pretrained_backbone:
