@@ -1,7 +1,7 @@
 #!/usr/bin/env python3
 # -*- coding: utf-8 -*-
 """
-Fair Training Launcher for RT-DETR HRNet-W18 Lightweight & Speed Suite (Exp 1 - Exp 12)
+Fair Training Launcher for RT-DETR HRNet-W18 Lightweight & Turbo Suite (Exp 1 - Exp 14)
 """
 
 import sys
@@ -10,8 +10,6 @@ if sys.version_info < (3, 8):
         f"[ERROR] train_hrnet_suite.py requires Python 3.8+ (detected: {sys.version}).\n"
         f"Please activate your Conda environment first:\n"
         f"    conda activate ultralytics_rtdetr\n"
-        f"or use the environment's Python explicitly:\n"
-        f"    ~/miniconda3/envs/ultralytics_rtdetr/bin/python RTDETR_HRNet_Lite_Suite/train_hrnet_suite.py\n"
     )
 
 import argparse
@@ -48,11 +46,13 @@ EXP_CONFIGS = {
     "Exp10_StarHR_Speed": str(SUITE_DIR / "configs" / "exp10_starhr_speed.yaml"),
     "Exp11_StarHR_192Speed": str(SUITE_DIR / "configs" / "exp11_starhr_192speed.yaml"),
     "Exp12_StarHR_Balanced": str(SUITE_DIR / "configs" / "exp12_starhr_balanced.yaml"),
+    "Exp13_StarHR_Turbo": str(SUITE_DIR / "configs" / "exp13_starhr_turbo.yaml"),
+    "Exp14_StarHR_Turbo_D2": str(SUITE_DIR / "configs" / "exp14_starhr_turbo_d2.yaml"),
 }
 
 
 def main():
-    parser = argparse.ArgumentParser(description="Fair Training Launcher for HRNet-Lite Suite (Exp1-Exp12)")
+    parser = argparse.ArgumentParser(description="Fair Training Launcher for HRNet-Lite Suite (Exp1-Exp14)")
     parser.add_argument("--exp", type=str, required=True, choices=list(EXP_CONFIGS.keys()))
     parser.add_argument("--data", type=str, default="dataset/DUT-Anti-UAV.yaml")
     parser.add_argument("--pretrained-backbone", type=str, default="")

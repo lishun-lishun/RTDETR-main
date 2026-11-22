@@ -100,6 +100,7 @@ from .hrnet_lite_suite import (
     FastHRNetBackbone,
     StarHRFastBackbone,
     StarHRBalancedBackbone,
+    StarHRTurboBackbone,
     SlimGhostRepC3,
     RepGhostC3,
     HaarDownsample,

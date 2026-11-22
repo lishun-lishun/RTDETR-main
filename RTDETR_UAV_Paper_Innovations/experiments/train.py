@@ -65,6 +65,8 @@ EXPERIMENT_MAP: Dict[str, str] = {
     "Exp10_StarHR_Speed": str(REPO_ROOT / "ultralytics" / "cfg" / "models" / "rt-detr" / "exp10_starhr_speed.yaml"),
     "Exp11_StarHR_192Speed": str(REPO_ROOT / "ultralytics" / "cfg" / "models" / "rt-detr" / "exp11_starhr_192speed.yaml"),
     "Exp12_StarHR_Balanced": str(REPO_ROOT / "ultralytics" / "cfg" / "models" / "rt-detr" / "exp12_starhr_balanced.yaml"),
+    "Exp13_StarHR_Turbo": str(REPO_ROOT / "ultralytics" / "cfg" / "models" / "rt-detr" / "exp13_starhr_turbo.yaml"),
+    "Exp14_StarHR_Turbo_D2": str(REPO_ROOT / "ultralytics" / "cfg" / "models" / "rt-detr" / "exp14_starhr_turbo_d2.yaml"),
 }
 
 

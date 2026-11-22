@@ -7,6 +7,7 @@ from ultralytics.nn.modules.hrnet_lite_suite import (
     FastHRNetBackbone,
     StarHRFastBackbone,
     StarHRBalancedBackbone,
+    StarHRTurboBackbone,
     SlimGhostRepC3,
     RepGhostC3,
     HaarDownsample,
@@ -197,6 +198,8 @@ class BaseModel(nn.Module):
         for _m in self.model.modules():
             if hasattr(_m, "switch_to_deploy") and callable(_m.switch_to_deploy):
                 _m.switch_to_deploy()
+        for _p in self.parameters():
+            _p.requires_grad = False
         # <<< [HRNET_LITE_FUSE_END] <<<
         if not self.is_fused():
             for m in self.model.modules():
@@ -1087,7 +1090,7 @@ def parse_model(d, ch, verbose=True, warehouse_manager=None):  # model_dict, inp
         # <<< [UAV_PAPER_INNOVATIONS_END] <<<
         # >>> [RTHRNET_W18_BEGIN] >>>
         # >>> [HRNET_LITE_SUITE_BEGIN] >>>
-        elif m in (BaseHRNetV2W18, HRNetPruneS4, HRNetPConvRep, HRNetStarRep, FastHRNetBackbone, StarHRFastBackbone, StarHRBalancedBackbone):
+        elif m in (BaseHRNetV2W18, HRNetPruneS4, HRNetPConvRep, HRNetStarRep, FastHRNetBackbone, StarHRFastBackbone, StarHRBalancedBackbone, StarHRTurboBackbone):
             m_ = m(*args)
             c2 = list(m_.out_channels)
             t = str(m)[8:-2].replace("__main__.", "")

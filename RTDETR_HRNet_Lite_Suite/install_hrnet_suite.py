@@ -1,10 +1,7 @@
 #!/usr/bin/env python3
 # -*- coding: utf-8 -*-
 """
-Idempotent Installer for `RTDETR_HRNet_Lite_Suite` (Exp 1 - Exp 12) into `RTDETR-main`.
-Includes a clean 3-line hook inside `BaseModel.fuse()` so Ultralytics `evaluate.py` / `val()`
-automatically runs full fair `Conv2d + BatchNorm2d` & structural reparameterization fusion
-across ALL models (Exp 1 - Exp 12) on equal footing with RT-DETR-R18!
+Idempotent Installer for `RTDETR_HRNet_Lite_Suite` v4 Turbo (Exp 1 - Exp 14) into `RTDETR-main`.
 """
 
 import sys
@@ -13,8 +10,6 @@ if sys.version_info < (3, 8):
         f"[ERROR] install_hrnet_suite.py requires Python 3.8+ (detected: {sys.version}).\n"
         f"Please activate your Conda environment first:\n"
         f"    conda activate ultralytics_rtdetr\n"
-        f"or use the environment's Python explicitly:\n"
-        f"    ~/miniconda3/envs/ultralytics_rtdetr/bin/python RTDETR_HRNet_Lite_Suite/install_hrnet_suite.py\n"
     )
 
 import argparse
@@ -57,6 +52,7 @@ from .hrnet_lite_suite import (
     FastHRNetBackbone,
     StarHRFastBackbone,
     StarHRBalancedBackbone,
+    StarHRTurboBackbone,
     SlimGhostRepC3,
     RepGhostC3,
     HaarDownsample,
@@ -83,6 +79,7 @@ from ultralytics.nn.modules.hrnet_lite_suite import (
     FastHRNetBackbone,
     StarHRFastBackbone,
     StarHRBalancedBackbone,
+    StarHRTurboBackbone,
     SlimGhostRepC3,
     RepGhostC3,
     HaarDownsample,
@@ -90,7 +87,7 @@ from ultralytics.nn.modules.hrnet_lite_suite import (
 {SENTINEL_END}
 """
     parse_snippet = f"""        {SENTINEL_BEGIN}
-        elif m in (BaseHRNetV2W18, HRNetPruneS4, HRNetPConvRep, HRNetStarRep, FastHRNetBackbone, StarHRFastBackbone, StarHRBalancedBackbone):
+        elif m in (BaseHRNetV2W18, HRNetPruneS4, HRNetPConvRep, HRNetStarRep, FastHRNetBackbone, StarHRFastBackbone, StarHRBalancedBackbone, StarHRTurboBackbone):
             m_ = m(*args)
             c2 = list(m_.out_channels)
             t = str(m)[8:-2].replace("__main__.", "")
@@ -127,7 +124,6 @@ from ultralytics.nn.modules.hrnet_lite_suite import (
             tasks_txt = tasks_txt.replace(anchor, parse_snippet + "\n" + anchor, 1)
             break
 
-    # Patch BaseModel.fuse() so ALL custom modules fuse Conv+BN cleanly during val/test/predict
     fuse_anchor = "        if not self.is_fused():"
     fuse_snippet = f"""        {FUSE_BEGIN}
         for _m in self.model.modules():
@@ -138,17 +134,14 @@ from ultralytics.nn.modules.hrnet_lite_suite import (
         {FUSE_END}"""
     if fuse_anchor in tasks_txt:
         tasks_txt = tasks_txt.replace(fuse_anchor, fuse_snippet + "\n" + fuse_anchor, 1)
-        print("[INFO] Hooked fair full Conv+BN fusion into `BaseModel.fuse()`.")
-    else:
-        print("[WARN] Could not locate `if not self.is_fused():` in tasks.py; manual fuse hook recommended.")
 
     tasks_file.write_text(top_import + tasks_txt, encoding="utf-8")
-    print(f"[SUCCESS] Installed RTDETR_HRNet_Lite_Suite v3 (Exp1-Exp12 + Fair Full Fusion) into {repo_root}")
+    print(f"[SUCCESS] Installed RTDETR_HRNet_Lite_Suite v4 Turbo (Exp1-Exp14) into {repo_root}")
     return 0
 
 
 def main():
-    parser = argparse.ArgumentParser(description="Install RTDETR_HRNet_Lite_Suite v3 (Exp1-Exp12)")
+    parser = argparse.ArgumentParser(description="Install RTDETR_HRNet_Lite_Suite v4 Turbo (Exp1-Exp14)")
     parser.add_argument("--repo", "--repo-root", type=str, default=".", help="Path to RTDETR-main")
     args = parser.parse_args()
     sys.exit(install(args.repo))

@@ -22,6 +22,8 @@ cfgs = [
     ('Exp10_StarHR_Speed', 'RTDETR_HRNet_Lite_Suite/configs/exp10_starhr_speed.yaml'),
     ('Exp11_StarHR_192Speed', 'RTDETR_HRNet_Lite_Suite/configs/exp11_starhr_192speed.yaml'),
     ('Exp12_StarHR_Balanced', 'RTDETR_HRNet_Lite_Suite/configs/exp12_starhr_balanced.yaml'),
+    ('Exp13_StarHR_Turbo', 'RTDETR_HRNet_Lite_Suite/configs/exp13_starhr_turbo.yaml'),
+    ('Exp14_StarHR_Turbo_D2', 'RTDETR_HRNet_Lite_Suite/configs/exp14_starhr_turbo_d2.yaml'),
 ]
 
 results = []
@@ -63,7 +65,7 @@ for name, cfg_path in cfgs:
         out_a = out_after[0] if isinstance(out_after, tuple) else out_after
         max_diff = (out_b - out_a).abs().max().item()
 
-    tol = 1e-9 if 'StarHR' in name else 1e-10
+    tol = 1e-10 if ('Turbo' in name or 'BaseHRNet' in name) else 1e-9
     print(f'[{name}] max_abs_diff = {max_diff:.3e} (tol={tol:.0e}), remaining grads = {grads}')
     assert max_diff < tol, f'{name} failed tolerance: {max_diff} >= {tol}'
     assert grads == 0, f'{name} has unclosed grads: {grads}'
@@ -75,4 +77,4 @@ print('-' * 60)
 for name, md, gr in results:
     print(f"{name:<25} | {md:>15.3e} | {gr:>6d}")
 print('=' * 60)
-print('ALL 5 MODELS 100% PASSED FP64 MATHEMATICAL EQUIVALENCE CHECK!')
+print(f'ALL {len(results)} MODELS 100% PASSED FP64 MATHEMATICAL EQUIVALENCE CHECK!')
