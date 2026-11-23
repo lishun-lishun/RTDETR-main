@@ -114,3 +114,12 @@ from .hrnet_lite_suite import (
 # >>> [SFGD_NECK_BEGIN] >>>
 from .sfgd_neck import FreqDecoupledBridge, SoftplusZeroConcatFusion, DualFreqAIFI
 # <<< [SFGD_NECK_END] <<<
+# >>> [NECK_ARENA_BEGIN] >>>
+from .neck_arena import (
+    GatherDistributeGate,
+    OrthogonalFreqFilter,
+    HiLoLinearAIFI,
+    StarC3,
+    MultiScaleContrastModule,
+)
+# <<< [NECK_ARENA_END] <<<

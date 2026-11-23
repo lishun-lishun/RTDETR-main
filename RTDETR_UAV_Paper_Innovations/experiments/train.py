@@ -72,6 +72,12 @@ EXPERIMENT_MAP: Dict[str, str] = {
     "Exp17_SFGD_Full": str(REPO_ROOT / "ultralytics" / "cfg" / "models" / "rt-detr" / "exp17_neck_sfgd_full.yaml"),
     "Exp18_SFGD_Turbo192": str(REPO_ROOT / "ultralytics" / "cfg" / "models" / "rt-detr" / "exp18_neck_sfgd_turbo192.yaml"),
     "Exp19_R18_SFGD": str(REPO_ROOT / "ultralytics" / "cfg" / "models" / "rt-detr" / "exp19_r18_sfgd_neck.yaml"),
+    "Exp20_Neck_GatherDist": str(REPO_ROOT / "ultralytics" / "cfg" / "models" / "rt-detr" / "exp20_neck_gather_dist.yaml"),
+    "Exp21_Neck_OrthFreq": str(REPO_ROOT / "ultralytics" / "cfg" / "models" / "rt-detr" / "exp21_neck_orth_freq.yaml"),
+    "Exp22_Neck_HiLoAIFI": str(REPO_ROOT / "ultralytics" / "cfg" / "models" / "rt-detr" / "exp22_neck_hilo_aifi.yaml"),
+    "Exp23_Neck_StarCCFF": str(REPO_ROOT / "ultralytics" / "cfg" / "models" / "rt-detr" / "exp23_neck_star_ccff.yaml"),
+    "Exp24_Neck_LocalContrast": str(REPO_ROOT / "ultralytics" / "cfg" / "models" / "rt-detr" / "exp24_neck_local_contrast.yaml"),
+    "Exp25_Neck_UltimateCombo": str(REPO_ROOT / "ultralytics" / "cfg" / "models" / "rt-detr" / "exp25_neck_ultimate_combo.yaml"),
 }
 
 

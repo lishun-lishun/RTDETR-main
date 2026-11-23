@@ -1,0 +1,37 @@
+# Exp 24: Neck Arena 5 - Center-Surround Local Contrast Enhancement Neck on Exp12 Backbone
+# Highlights dim isolated 6x6-24x24 UAVs against cluttered clouds/foliage/buildings with near-zero latency
+nc: 80
+scales:
+  l: [1.00, 1.00, 1024]
+
+backbone:
+  - [-1, 1, StarHRBalancedBackbone, [True]]  # 0
+  - [0, 1, HRNetFeature, [0]]                # 1-P3/8
+  - [0, 1, HRNetFeature, [1]]                # 2-P4/16
+  - [0, 1, HRNetFeature, [2]]                # 3-P5/32
+
+head:
+  - [-1, 1, Conv, [256, 1, 1, None, 1, 1, False]]  # 4
+  - [-1, 1, AIFI, [512, 8]]                        # 5
+  - [-1, 1, Conv, [256, 1, 1]]                     # 6 Y5
+
+  - [-1, 1, nn.Upsample, [None, 2, 'nearest']]     # 7
+  - [2, 1, MultiScaleContrastModule, [256]]        # 8 Center-Surround Local Contrast at P4
+  - [[-2, -1], 1, Concat, [1]]                     # 9
+  - [-1, 2, RepC3, [256, 0.5]]                     # 10
+  - [-1, 1, Conv, [256, 1, 1]]                     # 11 Y4
+
+  - [-1, 1, nn.Upsample, [None, 2, 'nearest']]     # 12
+  - [1, 1, MultiScaleContrastModule, [256]]        # 13 Center-Surround Local Contrast at P3
+  - [[-2, -1], 1, Concat, [1]]                     # 14
+  - [-1, 2, RepC3, [256, 0.5]]                     # 15
+  - [-1, 1, Conv, [256, 3, 2]]                     # 16
+
+  - [[-1, 11], 1, Concat, [1]]                     # 17
+  - [-1, 2, RepC3, [256, 0.5]]                     # 18
+  - [-1, 1, Conv, [256, 3, 2]]                     # 19
+
+  - [[-1, 6], 1, Concat, [1]]                      # 20
+  - [-1, 2, RepC3, [256, 0.5]]                     # 21
+
+  - [[15, 18, 21], 1, RTDETRDecoder, [nc, 256, 300, 4, 8, 3]]  # 22

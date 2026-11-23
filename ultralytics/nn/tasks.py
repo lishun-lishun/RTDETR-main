@@ -1,3 +1,12 @@
+# >>> [NECK_ARENA_BEGIN] >>>
+from ultralytics.nn.modules.neck_arena import (
+    GatherDistributeGate,
+    OrthogonalFreqFilter,
+    HiLoLinearAIFI,
+    StarC3,
+    MultiScaleContrastModule,
+)
+# <<< [NECK_ARENA_END] <<<
 # >>> [SFGD_NECK_BEGIN] >>>
 from ultralytics.nn.modules.sfgd_neck import FreqDecoupledBridge, SoftplusZeroConcatFusion, DualFreqAIFI
 # <<< [SFGD_NECK_END] <<<
@@ -1092,6 +1101,29 @@ def parse_model(d, ch, verbose=True, warehouse_manager=None):  # model_dict, inp
             args.insert(1, [ch[x] for x in f])
         # <<< [UAV_PAPER_INNOVATIONS_END] <<<
         # >>> [RTHRNET_W18_BEGIN] >>>
+        # >>> [NECK_ARENA_BEGIN] >>>
+        elif m is GatherDistributeGate:
+            c1 = [ch[x] for x in f]
+            c2 = args[0]
+            if c2 != nc:
+                c2 = make_divisible(min(c2, max_channels) * width, 8)
+            args = [c1, c2]
+        elif m in (OrthogonalFreqFilter, MultiScaleContrastModule):
+            c1, c2 = ch[f], args[0]
+            if c2 != nc:
+                c2 = make_divisible(min(c2, max_channels) * width, 8)
+            args = [c1, c2]
+        elif m is HiLoLinearAIFI:
+            c1 = ch[f]
+            c2 = c1
+            args = [c1, *args]
+        elif m is StarC3:
+            c1, c2 = ch[f], args[0]
+            if c2 != nc:
+                c2 = make_divisible(min(c2, max_channels) * width, 8)
+            args = [c1, c2, n, *args[1:]]
+            n = 1
+        # <<< [NECK_ARENA_END] <<<
         # >>> [SFGD_NECK_BEGIN] >>>
         elif m in (FreqDecoupledBridge, SoftplusZeroConcatFusion):
             c1 = [ch[x] for x in f]

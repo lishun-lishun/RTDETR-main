@@ -1,0 +1,37 @@
+# Exp 21: Neck Arena 2 - Orthogonal DWT-Gate-IDWT Frequency Filter Neck on Exp12 Backbone
+# Exact lossless 4-subband frequency filtering + IDWT reconstruction at P3 & P4
+nc: 80
+scales:
+  l: [1.00, 1.00, 1024]
+
+backbone:
+  - [-1, 1, StarHRBalancedBackbone, [True]]  # 0
+  - [0, 1, HRNetFeature, [0]]                # 1-P3/8
+  - [0, 1, HRNetFeature, [1]]                # 2-P4/16
+  - [0, 1, HRNetFeature, [2]]                # 3-P5/32
+
+head:
+  - [-1, 1, Conv, [256, 1, 1, None, 1, 1, False]]  # 4
+  - [-1, 1, AIFI, [512, 8]]                        # 5
+  - [-1, 1, Conv, [256, 1, 1]]                     # 6 Y5
+
+  - [-1, 1, nn.Upsample, [None, 2, 'nearest']]     # 7
+  - [2, 1, OrthogonalFreqFilter, [256]]            # 8 Exact DWT->Gate->IDWT at P4 (72->256)
+  - [[-2, -1], 1, Concat, [1]]                     # 9
+  - [-1, 2, RepC3, [256, 0.5]]                     # 10
+  - [-1, 1, Conv, [256, 1, 1]]                     # 11 Y4
+
+  - [-1, 1, nn.Upsample, [None, 2, 'nearest']]     # 12
+  - [1, 1, OrthogonalFreqFilter, [256]]            # 13 Exact DWT->Gate->IDWT at P3 (36->256)
+  - [[-2, -1], 1, Concat, [1]]                     # 14
+  - [-1, 2, RepC3, [256, 0.5]]                     # 15
+  - [-1, 1, HaarDownsample, [256]]                 # 16
+
+  - [[-1, 11], 1, Concat, [1]]                     # 17
+  - [-1, 2, RepC3, [256, 0.5]]                     # 18
+  - [-1, 1, HaarDownsample, [256]]                 # 19
+
+  - [[-1, 6], 1, Concat, [1]]                      # 20
+  - [-1, 2, RepC3, [256, 0.5]]                     # 21
+
+  - [[15, 18, 21], 1, RTDETRDecoder, [nc, 256, 300, 4, 8, 3]]  # 22
