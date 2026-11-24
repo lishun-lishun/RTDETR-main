@@ -1,3 +1,6 @@
+# >>> [EXP6_SPEED_BEGIN] >>>
+from ultralytics.nn.modules.exp6_speed import HRNetStarFast
+# <<< [EXP6_SPEED_END] <<<
 # >>> [NECK_ARENA_BEGIN] >>>
 from ultralytics.nn.modules.neck_arena import (
     GatherDistributeGate,
@@ -1101,6 +1104,20 @@ def parse_model(d, ch, verbose=True, warehouse_manager=None):  # model_dict, inp
             args.insert(1, [ch[x] for x in f])
         # <<< [UAV_PAPER_INNOVATIONS_END] <<<
         # >>> [RTHRNET_W18_BEGIN] >>>
+        # >>> [EXP6_SPEED_BEGIN] >>>
+        elif m is HRNetStarFast:
+            m_ = m(*args)
+            c2 = list(m_.out_channels)
+            t = str(m)[8:-2].replace("__main__.", "")
+            m_.np = sum(x.numel() for x in m_.parameters())
+            m_.i, m_.f, m_.type = i, f, t
+            save.extend(x % i for x in ([f] if isinstance(f, int) else f) if x != -1)
+            layers.append(m_)
+            if i == 0:
+                ch = []
+            ch.append(c2)
+            continue
+        # <<< [EXP6_SPEED_END] <<<
         # >>> [NECK_ARENA_BEGIN] >>>
         elif m is GatherDistributeGate:
             c1 = [ch[x] for x in f]

@@ -78,6 +78,10 @@ EXPERIMENT_MAP: Dict[str, str] = {
     "Exp23_Neck_StarCCFF": str(REPO_ROOT / "ultralytics" / "cfg" / "models" / "rt-detr" / "exp23_neck_star_ccff.yaml"),
     "Exp24_Neck_LocalContrast": str(REPO_ROOT / "ultralytics" / "cfg" / "models" / "rt-detr" / "exp24_neck_local_contrast.yaml"),
     "Exp25_Neck_UltimateCombo": str(REPO_ROOT / "ultralytics" / "cfg" / "models" / "rt-detr" / "exp25_neck_ultimate_combo.yaml"),
+    "Exp26_StarFast_SameNeck": str(REPO_ROOT / "ultralytics" / "cfg" / "models" / "rt-detr" / "exp26_starfast_sameneck.yaml"),
+    "Exp27_StarFast_NativeRepC3": str(REPO_ROOT / "ultralytics" / "cfg" / "models" / "rt-detr" / "exp27_starfast_nativerepc3.yaml"),
+    "Exp28_StarFast_HiLoHaar": str(REPO_ROOT / "ultralytics" / "cfg" / "models" / "rt-detr" / "exp28_starfast_hilo_haar.yaml"),
+    "Exp29_StarFast_ZeroConcat": str(REPO_ROOT / "ultralytics" / "cfg" / "models" / "rt-detr" / "exp29_starfast_zeroconcat.yaml"),
 }
 
 

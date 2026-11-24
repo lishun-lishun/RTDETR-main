@@ -123,3 +123,6 @@ from .neck_arena import (
     MultiScaleContrastModule,
 )
 # <<< [NECK_ARENA_END] <<<
+# >>> [EXP6_SPEED_BEGIN] >>>
+from .exp6_speed import HRNetStarFast
+# <<< [EXP6_SPEED_END] <<<
