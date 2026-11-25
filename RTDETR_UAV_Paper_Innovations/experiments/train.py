@@ -82,6 +82,9 @@ EXPERIMENT_MAP: Dict[str, str] = {
     "Exp27_StarFast_NativeRepC3": str(REPO_ROOT / "ultralytics" / "cfg" / "models" / "rt-detr" / "exp27_starfast_nativerepc3.yaml"),
     "Exp28_StarFast_HiLoHaar": str(REPO_ROOT / "ultralytics" / "cfg" / "models" / "rt-detr" / "exp28_starfast_hilo_haar.yaml"),
     "Exp29_StarFast_ZeroConcat": str(REPO_ROOT / "ultralytics" / "cfg" / "models" / "rt-detr" / "exp29_starfast_zeroconcat.yaml"),
+    "Exp30_RepStarFast_HiLoHaar": str(REPO_ROOT / "ultralytics" / "cfg" / "models" / "rt-detr" / "exp30_repstarfast_hilo_haar.yaml"),
+    "Exp31_Exp28_InnerNWD": str(REPO_ROOT / "ultralytics" / "cfg" / "models" / "rt-detr" / "exp28_starfast_hilo_haar.yaml"),
+    "Exp32_Exp28Plus_Full": str(REPO_ROOT / "ultralytics" / "cfg" / "models" / "rt-detr" / "exp30_repstarfast_hilo_haar.yaml"),
 }
 
 
@@ -188,6 +191,10 @@ def main():
         raise RuntimeError(f"Imported external ultralytics ({actual_init}) instead of repo ({expected_init})!")
 
     from ultralytics import RTDETR
+
+    if args.exp in ("Exp31_Exp28_InnerNWD", "Exp32_Exp28Plus_Full"):
+        from ultralytics.nn.modules.exp28_plus import patch_rtdetr_inner_nwd_loss
+        patch_rtdetr_inner_nwd_loss()
 
     model = RTDETR(model_yaml)
     if args.weights and os.path.exists(args.weights):

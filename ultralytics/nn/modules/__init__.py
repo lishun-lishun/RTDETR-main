@@ -126,3 +126,6 @@ from .neck_arena import (
 # >>> [EXP6_SPEED_BEGIN] >>>
 from .exp6_speed import HRNetStarFast
 # <<< [EXP6_SPEED_END] <<<
+# >>> [EXP28_PLUS_BEGIN] >>>
+from .exp28_plus import RepStarFastBlock, HRNetRepStarFast
+# <<< [EXP28_PLUS_END] <<<
