@@ -18,7 +18,7 @@ for DS in TIB-Net Det-Fly NPS-Drones; do
     echo "[SKIP] Missing $DATA_YAML"
     continue
   fi
-  for MDL in RT-DETR-R18 Exp2_PruneS4 Exp27_StarFast_NativeRepC3 Exp28_StarFast_HiLoHaar Exp14_StarHR_Turbo_D2; do
+  for MDL in RT-DETR-R18 Exp1_BaseHRNet Exp2_PruneS4 Exp14_StarHR_Turbo_D2 Exp27_StarFast_NativeRepC3 Exp28_StarFast_HiLoHaar Exp30_RepStarFast_HiLoHaar Exp31_Exp28_InnerNWD Exp32_Exp28Plus_Full; do
     CKPT="${ROOT}/${DS}/${MDL}_seed${SEED}/weights/best.pt"
     if [ -f "$CKPT" ]; then
       PYTHONPATH=. python RTDETR_CrossDataset_4090/eval_single_ckpt_4090.py \
