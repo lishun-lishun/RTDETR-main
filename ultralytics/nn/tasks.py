@@ -1,3 +1,6 @@
+# >>> [EXP33_ANTICOLLAPSE_BEGIN] >>>
+from ultralytics.nn.modules.exp33_anticollapse import FCGHaarDownsample, AntiCollapseRTDETRDecoder
+# <<< [EXP33_ANTICOLLAPSE_END] <<<
 # >>> [EXP28_PLUS_BEGIN] >>>
 from ultralytics.nn.modules.exp28_plus import HRNetRepStarFast
 # <<< [EXP28_PLUS_END] <<<
@@ -1208,6 +1211,13 @@ def parse_model(d, ch, verbose=True, warehouse_manager=None):  # model_dict, inp
             ch.append(c2)
             continue
         # <<< [RTHRNET_W18_END] <<<
+        # >>> [EXP33_ANTICOLLAPSE_BEGIN] >>>
+        elif m is FCGHaarDownsample:
+            c1, c2 = ch[f], args[0]
+            args = [c1, c2, *args[1:]]
+        elif m is AntiCollapseRTDETRDecoder:
+            args.insert(1, [ch[x] for x in f])
+        # <<< [EXP33_ANTICOLLAPSE_END] <<<
         elif m in (RTDETRDecoder, UAVResearchDecoder, TinyUAVDecoder):  # special case, channels arg must be passed in index 1
             args.insert(1, [ch[x] for x in f])
         elif isinstance(m, str):

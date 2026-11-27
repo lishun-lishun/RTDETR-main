@@ -129,3 +129,6 @@ from .exp6_speed import HRNetStarFast
 # >>> [EXP28_PLUS_BEGIN] >>>
 from .exp28_plus import RepStarFastBlock, HRNetRepStarFast
 # <<< [EXP28_PLUS_END] <<<
+# >>> [EXP33_ANTICOLLAPSE_BEGIN] >>>
+from .exp33_anticollapse import FCGHaarDownsample, AntiCollapseMSDeformAttn, AntiCollapseRTDETRDecoder
+# <<< [EXP33_ANTICOLLAPSE_END] <<<
