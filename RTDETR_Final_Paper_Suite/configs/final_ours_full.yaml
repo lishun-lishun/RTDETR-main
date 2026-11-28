@@ -1,0 +1,39 @@
+# Final Suite - Full Proposed Model (Imp1 + Imp2 + Imp3 = Exp31_Exp28_InnerNWD)
+# Imp1: HRNetStarFast (HaarP2FoldTransition + Stage-4 P2 Pruning + Sparse Fusion + StarFastBlock)
+# Imp2: HiLoLinearAIFI + Alias-Free HaarDownsample PAN
+# Imp3: Scale-Aware Inner-GIoU + NWD Loss (enabled in train_final_suite.py, 0.00 ms deploy cost)
+nc: 80
+scales:
+  l: [1.00, 1.00, 1024]
+
+backbone:
+  - [-1, 1, HRNetStarFast, [True]]     # 0
+  - [0, 1, HRNetFeature, [0]]          # 1-P3/8
+  - [0, 1, HRNetFeature, [1]]          # 2-P4/16
+  - [0, 1, HRNetFeature, [2]]          # 3-P5/32
+
+head:
+  - [-1, 1, Conv, [256, 1, 1, None, 1, 1, False]]  # 4
+  - [-1, 1, HiLoLinearAIFI, [512, 4]]              # 5
+  - [-1, 1, Conv, [256, 1, 1]]                     # 6
+
+  - [-1, 1, nn.Upsample, [None, 2, 'nearest']]     # 7
+  - [2, 1, Conv, [256, 1, 1, None, 1, 1, False]]   # 8
+  - [[-2, -1], 1, Concat, [1]]                     # 9
+  - [-1, 2, RepC3, [256, 0.5]]                     # 10
+  - [-1, 1, Conv, [256, 1, 1]]                     # 11
+
+  - [-1, 1, nn.Upsample, [None, 2, 'nearest']]     # 12
+  - [1, 1, Conv, [256, 1, 1, None, 1, 1, False]]   # 13
+  - [[-2, -1], 1, Concat, [1]]                     # 14
+  - [-1, 2, RepC3, [256, 0.5]]                     # 15
+  - [-1, 1, HaarDownsample, [256]]                 # 16
+
+  - [[-1, 11], 1, Concat, [1]]                     # 17
+  - [-1, 2, RepC3, [256, 0.5]]                     # 18
+  - [-1, 1, HaarDownsample, [256]]                 # 19
+
+  - [[-1, 6], 1, Concat, [1]]                      # 20
+  - [-1, 2, RepC3, [256, 0.5]]                     # 21
+
+  - [[15, 18, 21], 1, RTDETRDecoder, [nc, 256, 300, 4, 8, 3]]  # 22

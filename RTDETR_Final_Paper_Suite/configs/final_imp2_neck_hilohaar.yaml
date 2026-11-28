@@ -1,0 +1,41 @@
+# Final Suite - Improvement 2 Only: HiLoLinearAIFI + Alias-Free HaarDownsample PAN Neck
+# Plugged cleanly onto Vanilla RT-DETR-R18 (PResNet18-vd) Backbone with Standard GIoU Loss.
+nc: 80
+scales:
+  l: [1.00, 1.00, 1024]
+
+backbone:
+  - [-1, 1, ConvNormLayer, [32, 3, 2, None, False, 'relu']]            # 0-P1/2
+  - [-1, 1, ConvNormLayer, [32, 3, 1, None, False, 'relu']]            # 1
+  - [-1, 1, ConvNormLayer, [64, 3, 1, None, False, 'relu']]            # 2
+  - [-1, 1, nn.MaxPool2d, [3, 2, 1]]                                   # 3-P2/4
+  - [-1, 1, Blocks, [64, BasicBlock, 2, 2, 'relu']]                    # 4-P2/4
+  - [-1, 1, Blocks, [128, BasicBlock, 2, 3, 'relu']]                   # 5-P3/8
+  - [-1, 1, Blocks, [256, BasicBlock, 2, 4, 'relu']]                   # 6-P4/16
+  - [-1, 1, Blocks, [512, BasicBlock, 2, 5, 'relu']]                   # 7-P5/32
+
+head:
+  - [-1, 1, Conv, [256, 1, 1, None, 1, 1, False]]  # 8
+  - [-1, 1, HiLoLinearAIFI, [512, 4]]              # 9  Improvement 2: HiLoLinearAIFI
+  - [-1, 1, Conv, [256, 1, 1]]                     # 10
+
+  - [-1, 1, nn.Upsample, [None, 2, 'nearest']]     # 11
+  - [6, 1, Conv, [256, 1, 1, None, 1, 1, False]]   # 12
+  - [[-2, -1], 1, Concat, [1]]                     # 13
+  - [-1, 2, RepC3, [256, 0.5]]                     # 14
+  - [-1, 1, Conv, [256, 1, 1]]                     # 15
+
+  - [-1, 1, nn.Upsample, [None, 2, 'nearest']]     # 16
+  - [5, 1, Conv, [256, 1, 1, None, 1, 1, False]]   # 17
+  - [[-2, -1], 1, Concat, [1]]                     # 18
+  - [-1, 2, RepC3, [256, 0.5]]                     # 19
+  - [-1, 1, HaarDownsample, [256]]                 # 20 Improvement 2: Haar PAN Downsample
+
+  - [[-1, 15], 1, Concat, [1]]                     # 21
+  - [-1, 2, RepC3, [256, 0.5]]                     # 22
+  - [-1, 1, HaarDownsample, [256]]                 # 23 Improvement 2: Haar PAN Downsample
+
+  - [[-1, 10], 1, Concat, [1]]                     # 24
+  - [-1, 2, RepC3, [256, 0.5]]                     # 25
+
+  - [[19, 22, 25], 1, RTDETRDecoder, [nc, 256, 300, 4, 8, 3]]  # 26
